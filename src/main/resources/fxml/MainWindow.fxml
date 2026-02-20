@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.notegraph.controller.MainController"
+            prefHeight="700.0" prefWidth="1200.0">
+
+    <!-- Меню -->
+    <top>
+        <VBox>
+            <MenuBar>
+                <Menu text="Файл">
+                    <MenuItem text="Новая заметка" onAction="#handleNewNote" accelerator="Ctrl+N"/>
+                    <MenuItem text="Сохранить" onAction="#handleSave" accelerator="Ctrl+S"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Экспорт..." onAction="#handleExport"/>
+                    <MenuItem text="Импорт..." onAction="#handleImport"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Выход" onAction="#handleExit"/>
+                </Menu>
+                <Menu text="Правка">
+                    <MenuItem text="Удалить заметку" onAction="#handleDeleteNote" accelerator="Delete"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Найти..." onAction="#handleFind" accelerator="Ctrl+F"/>
+                </Menu>
+                <Menu text="Вид">
+                    <CheckMenuItem fx:id="menuPreviewMode" text="Режим просмотра" onAction="#handleTogglePreview" accelerator="Ctrl+P"/>
+                    <CheckMenuItem fx:id="menuShowGraph" text="Показать граф" onAction="#handleToggleGraph"/>
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Светлая тема" onAction="#handleLightTheme"/>
+                    <MenuItem text="Тёмная тема" onAction="#handleDarkTheme"/>
+                </Menu>
+                <Menu text="Помощь">
+                    <MenuItem text="О программе" onAction="#handleAbout"/>
+                </Menu>
+            </MenuBar>
+
+            <!-- Панель инструментов -->
+            <ToolBar>
+                <Button text="Новая" onAction="#handleNewNote" styleClass="toolbar-button"/>
+                <Button text="Удалить" onAction="#handleDeleteNote" styleClass="toolbar-button"/>
+                <Separator orientation="VERTICAL"/>
+                <TextField fx:id="searchField" promptText="Поиск..." prefWidth="250" onAction="#handleSearch"/>
+                <Button text="Найти" onAction="#handleSearch" styleClass="toolbar-button"/>
+            </ToolBar>
+        </VBox>
+    </top>
+
+    <!-- Основная область -->
+    <center>
+        <SplitPane dividerPositions="0.25, 0.75" fx:id="mainSplitPane">
+
+            <!-- Левая панель - список заметок -->
+            <VBox spacing="5" styleClass="notes-panel">
+                <padding>
+                    <Insets top="5" right="5" bottom="5" left="5"/>
+                </padding>
+
+                <Label text="Заметки" styleClass="panel-title"/>
+
+                <HBox spacing="5">
+                    <ComboBox fx:id="sortComboBox" promptText="Сортировка" prefWidth="150" onAction="#handleSortChange"/>
+                    <Button text="↻" onAction="#handleRefreshNotes" styleClass="icon-button"/>
+                </HBox>
+
+                <ListView fx:id="notesListView" VBox.vgrow="ALWAYS" onMouseClicked="#handleNoteSelect"/>
+
+                <HBox spacing="5">
+                    <Label text="Всего: " styleClass="info-label"/>
+                    <Label fx:id="notesCountLabel" text="0" styleClass="info-label"/>
+                </HBox>
+            </VBox>
+
+            <!-- Центральная панель - редактор -->
+            <VBox spacing="5" styleClass="editor-panel">
+                <padding>
+                    <Insets top="5" right="5" bottom="5" left="5"/>
+                </padding>
+
+                <!-- Заголовок заметки -->
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Заголовок:" styleClass="field-label"/>
+                    <TextField fx:id="titleField" HBox.hgrow="ALWAYS" promptText="Введите заголовок заметки"/>
+                </HBox>
+
+                <!-- Панель переключения режимов -->
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <ToggleButton fx:id="editModeButton" text="Редактирование" selected="true" onAction="#handleModeToggle" styleClass="mode-button"/>
+                    <ToggleButton fx:id="previewModeButton" text="Просмотр" onAction="#handleModeToggle" styleClass="mode-button"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Label fx:id="statusLabel" text="" styleClass="status-label"/>
+                </HBox>
+
+                <!-- Стек для переключения между редактором и просмотром -->
+                <StackPane VBox.vgrow="ALWAYS" fx:id="editorStackPane">
+                    <!-- Редактор -->
+                    <TextArea fx:id="contentTextArea" promptText="Введите текст заметки... Используйте [[название]] для создания ссылок"
+                              wrapText="true" styleClass="content-editor" managed="true" visible="true"/>
+
+                    <!-- Просмотр (WebView) -->
+                    <ScrollPane fx:id="previewScrollPane" managed="false" visible="false" fitToWidth="true">
+                        <VBox fx:id="previewPane" styleClass="preview-pane">
+                            <padding>
+                                <Insets top="10" right="10" bottom="10" left="10"/>
+                            </padding>
+                        </VBox>
+                    </ScrollPane>
+                </StackPane>
+
+                <!-- Информация о заметке -->
+                <HBox spacing="15" styleClass="info-bar">
+                    <Label fx:id="createdLabel" text="" styleClass="info-text"/>
+                    <Label fx:id="updatedLabel" text="" styleClass="info-text"/>
+                    <Label fx:id="linksCountLabel" text="" styleClass="info-text"/>
+                </HBox>
+            </VBox>
+
+            <!-- Правая панель - связи -->
+            <VBox spacing="5" styleClass="links-panel">
+                <padding>
+                    <Insets top="5" right="5" bottom="5" left="5"/>
+                </padding>
+
+                <Label text="Связи" styleClass="panel-title"/>
+
+                <!-- Исходящие связи -->
+                <VBox spacing="3" VBox.vgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="5">
+                        <Label text="Исходящие" styleClass="section-title"/>
+                        <Label fx:id="outgoingCountLabel" text="(0)" styleClass="count-label"/>
+                    </HBox>
+                    <ListView fx:id="outgoingLinksListView" VBox.vgrow="ALWAYS" onMouseClicked="#handleLinkClick"/>
+                </VBox>
+
+                <Separator/>
+
+                <!-- Входящие связи -->
+                <VBox spacing="3" VBox.vgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="5">
+                        <Label text="Входящие" styleClass="section-title"/>
+                        <Label fx:id="incomingCountLabel" text="(0)" styleClass="count-label"/>
+                    </HBox>
+                    <ListView fx:id="incomingLinksListView" VBox.vgrow="ALWAYS" onMouseClicked="#handleLinkClick"/>
+                </VBox>
+
+                <Separator/>
+
+                <Button text="Показать граф" onAction="#handleShowGraph" maxWidth="Infinity"/>
+            </VBox>
+
+        </SplitPane>
+    </center>
+
+    <!-- Нижняя панель - статусная строка -->
+    <bottom>
+        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="status-bar">
+            <padding>
+                <Insets top="3" right="10" bottom="3" left="10"/>
+            </padding>
+            <Label fx:id="statusBarLabel" text="Готов" HBox.hgrow="ALWAYS"/>
+            <Label fx:id="autoSaveLabel" text=""/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

@@ -1,0 +1,120 @@
+/* Основные цвета */
+.root {
+    -fx-base: #ffffff;
+    -fx-background: #f5f5f5;
+    -fx-control-inner-background: white;
+    -fx-accent: #6200ea;
+}
+
+/* Панели */
+.notes-panel, .editor-panel, .links-panel {
+    -fx-background-color: white;
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 0 1 0 0;
+}
+
+/* Заголовки панелей */
+.panel-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #333;
+}
+
+.section-title {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #666;
+}
+
+/* Редактор */
+.content-editor {
+    -fx-font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+    -fx-font-size: 13px;
+}
+
+/* Панель просмотра */
+.preview-pane {
+    -fx-background-color: white;
+}
+
+/* Кнопки режимов */
+.mode-button {
+    -fx-background-color: #f0f0f0;
+    -fx-text-fill: #333;
+}
+
+.mode-button:selected {
+    -fx-background-color: #6200ea;
+    -fx-text-fill: white;
+}
+
+/* Информационные метки */
+.info-label, .info-text {
+    -fx-font-size: 11px;
+    -fx-text-fill: #666;
+}
+
+.count-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #999;
+}
+
+/* Статус бар */
+.status-bar {
+    -fx-background-color: #f0f0f0;
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 1 0 0 0;
+}
+
+.status-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #666;
+}
+
+/* Информационная панель */
+.info-bar {
+    -fx-background-color: #fafafa;
+    -fx-padding: 5;
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 1 0 0 0;
+}
+
+/* ListView */
+.list-view {
+    -fx-border-color: #e0e0e0;
+}
+
+.list-cell:selected {
+    -fx-background-color: #6200ea;
+    -fx-text-fill: white;
+}
+
+.list-cell:hover {
+    -fx-background-color: #f0f0f0;
+}
+
+/* Кнопки панели инструментов */
+.toolbar-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #333;
+}
+
+.toolbar-button:hover {
+    -fx-background-color: #f0f0f0;
+}
+
+.icon-button {
+    -fx-background-color: transparent;
+    -fx-font-size: 14px;
+}
+
+/* Поля ввода */
+.text-field {
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 1;
+    -fx-background-color: white;
+}
+
+.text-field:focused {
+    -fx-border-color: #6200ea;
+}
