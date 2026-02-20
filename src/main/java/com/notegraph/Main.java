@@ -139,7 +139,7 @@ public class Main extends Application {
         });
 
         // Информация о версии
-        Label versionLabel = new Label("Версия 1.0-SNAPSHOT");
+        Label versionLabel = new Label("Версия 1.2-SNAPSHOT");
         versionLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
 
         // Добавление элементов в контейнер

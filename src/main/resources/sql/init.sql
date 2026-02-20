@@ -46,8 +46,6 @@ CREATE TABLE IF NOT EXISTS note_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
--- Создание индексов для оптимизации поиска
-
 -- Индекс для полнотекстового поиска по заголовку
 CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title);
 
@@ -80,8 +78,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     content_rowid=id,
     tokenize='porter unicode61'
 );
-
--- Триггеры для автоматического обновления FTS-индекса
 
 -- Триггер для добавления новой заметки в FTS-индекс
 CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
