@@ -67,7 +67,8 @@
                     <Button text="↻" onAction="#handleRefreshNotes" styleClass="icon-button"/>
                 </HBox>
 
-                <ListView fx:id="notesListView" VBox.vgrow="ALWAYS" onMouseClicked="#handleNoteSelect"/>
+                <!-- ИСПРАВЛЕНО: Убран onMouseClicked="#handleNoteSelect" -->
+                <ListView fx:id="notesListView" VBox.vgrow="ALWAYS"/>
 
                 <HBox spacing="5">
                     <Label text="Всего: " styleClass="info-label"/>
@@ -96,13 +97,24 @@
                 </HBox>
 
                 <!-- Стек для переключения между редактором и просмотром -->
+                <!-- ИСПРАВЛЕНО: TextArea теперь внутри ScrollPane для устранения двойного скроллбара -->
+                <!-- Стек для переключения между редактором и просмотром -->
                 <StackPane VBox.vgrow="ALWAYS" fx:id="editorStackPane">
-                    <!-- Редактор -->
-                    <TextArea fx:id="contentTextArea" promptText="Введите текст заметки... Используйте [[название]] для создания ссылок"
-                              wrapText="true" styleClass="content-editor" managed="true" visible="true"/>
+                    <!-- Редактор - TextArea БЕЗ обёртки в ScrollPane -->
+                    <TextArea fx:id="contentTextArea"
+                              promptText="Введите текст заметки... Используйте [[название]] для создания ссылок"
+                              wrapText="true"
+                              styleClass="content-editor"
+                              managed="true"
+                              visible="true"/>
 
                     <!-- Просмотр (WebView) -->
-                    <ScrollPane fx:id="previewScrollPane" managed="false" visible="false" fitToWidth="true">
+                    <ScrollPane fx:id="previewScrollPane"
+                                managed="false"
+                                visible="false"
+                                fitToWidth="true"
+                                hbarPolicy="NEVER"
+                                vbarPolicy="NEVER">
                         <VBox fx:id="previewPane" styleClass="preview-pane">
                             <padding>
                                 <Insets top="10" right="10" bottom="10" left="10"/>

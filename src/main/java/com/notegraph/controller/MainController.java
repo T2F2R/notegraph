@@ -9,38 +9,36 @@ import com.notegraph.service.impl.NoteServiceImpl;
 import com.notegraph.service.impl.SearchServiceImpl;
 import com.notegraph.util.MarkdownRenderer;
 import javafx.application.Platform;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.SortedList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseButton;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Timer;
 import java.util.TimerTask;
 
-/**
- * Контроллер главного окна приложения.
- */
 public class MainController {
-    private static final Logger logger = LoggerFactory.getLogger(MainController.class);
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-    // Сервисы
-    private final NoteService noteService;
-    private final LinkService linkService;
-    private final SearchService searchService;
-    private final MarkdownRenderer markdownRenderer;
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-    // Компоненты UI
-    @FXML private SplitPane mainSplitPane;
+    // --- Services ---
+    private final NoteService noteService = new NoteServiceImpl();
+    private final LinkService linkService = new LinkServiceImpl();
+    private final SearchService searchService = new SearchServiceImpl();
+    private final MarkdownRenderer markdownRenderer = new MarkdownRenderer();
+    private ToggleGroup modeToggleGroup;
+
+    // --- UI ---
     @FXML private TextField searchField;
     @FXML private ComboBox<String> sortComboBox;
     @FXML private ListView<Note> notesListView;
@@ -54,380 +52,180 @@ public class MainController {
 
     @FXML private ToggleButton editModeButton;
     @FXML private ToggleButton previewModeButton;
-    @FXML private Label statusLabel;
+
     @FXML private Label createdLabel;
     @FXML private Label updatedLabel;
     @FXML private Label linksCountLabel;
 
     @FXML private ListView<Note> outgoingLinksListView;
     @FXML private ListView<Note> incomingLinksListView;
-    @FXML private Label outgoingCountLabel;
-    @FXML private Label incomingCountLabel;
 
     @FXML private Label statusBarLabel;
     @FXML private Label autoSaveLabel;
 
     @FXML private CheckMenuItem menuPreviewMode;
-    @FXML private CheckMenuItem menuShowGraph;
 
-    // Состояние
-    private Note currentNote;
-    private boolean isEditMode = true;
+    // --- State ---
+    private final ObservableList<Note> notes = FXCollections.observableArrayList();
+    private SortedList<Note> sortedNotes;
+    private final SimpleObjectProperty<Note> currentNote = new SimpleObjectProperty<>();
     private Timer autoSaveTimer;
     private WebView webView;
-
-    public MainController() {
-        this.noteService = new NoteServiceImpl();
-        this.linkService = new LinkServiceImpl();
-        this.searchService = new SearchServiceImpl();
-        this.markdownRenderer = new MarkdownRenderer();
-    }
+    private boolean isEditMode = true;
 
     @FXML
     public void initialize() {
-        logger.info("Инициализация главного окна");
 
-        setupSortComboBox();
-        setupNotesListView();
-        setupLinksListViews();
-        setupToggleButtons();
-        setupAutoSave();
+        setupList();
+        setupSorting();
+        setupSelectionListener();
         setupWebView();
+        setupAutoSave();
+        setupToggleGroup();
 
         loadAllNotes();
-        updateNotesCount();
 
-        // Устанавливаем фокус на поле поиска
-        Platform.runLater(() -> searchField.requestFocus());
+        editorStackPane.setVisible(false);
+        editorStackPane.setManaged(false);
     }
 
-    /**
-     * Настройка ComboBox для сортировки.
-     */
-    private void setupSortComboBox() {
-        ObservableList<String> sortOptions = FXCollections.observableArrayList(
-                "По дате изменения (↓)",
-                "По дате изменения (↑)",
-                "По дате создания (↓)",
-                "По дате создания (↑)",
-                "По названию (А-Я)",
-                "По названию (Я-А)"
-        );
-        sortComboBox.setItems(sortOptions);
-        sortComboBox.getSelectionModel().select(0);
-    }
-
-    /**
-     * Настройка ListView заметок.
-     */
-    private void setupNotesListView() {
+    private void setupList() {
         notesListView.setCellFactory(param -> new ListCell<>() {
             @Override
             protected void updateItem(Note note, boolean empty) {
                 super.updateItem(note, empty);
-                if (empty || note == null) {
-                    setText(null);
-                } else {
-                    setText(note.getTitle());
-                }
+                setText(empty || note == null ? null : note.getTitle());
             }
         });
     }
 
-    /**
-     * Настройка ListView связей.
-     */
-    private void setupLinksListViews() {
-        // Исходящие связи
-        outgoingLinksListView.setCellFactory(param -> new ListCell<>() {
-            @Override
-            protected void updateItem(Note note, boolean empty) {
-                super.updateItem(note, empty);
-                if (empty || note == null) {
-                    setText(null);
-                } else {
-                    setText("→ " + note.getTitle());
-                }
+    private void setupSorting() {
+
+        sortComboBox.setItems(FXCollections.observableArrayList(
+                "По дате изменения ↓",
+                "По дате изменения ↑",
+                "По дате создания ↓",
+                "По дате создания ↑",
+                "По названию А-Я",
+                "По названию Я-А"
+        ));
+
+        sortedNotes = new SortedList<>(notes);
+        notesListView.setItems(sortedNotes);
+
+        sortComboBox.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> applySort());
+        sortComboBox.getSelectionModel().select(0);
+    }
+
+    private void applySort() {
+        int index = sortComboBox.getSelectionModel().getSelectedIndex();
+
+        Comparator<Note> comparator = switch (index) {
+            case 0 -> Comparator.comparing(Note::getUpdatedAt).reversed();
+            case 1 -> Comparator.comparing(Note::getUpdatedAt);
+            case 2 -> Comparator.comparing(Note::getCreatedAt).reversed();
+            case 3 -> Comparator.comparing(Note::getCreatedAt);
+            case 4 -> Comparator.comparing(Note::getTitle, String.CASE_INSENSITIVE_ORDER);
+            case 5 -> Comparator.comparing(Note::getTitle, String.CASE_INSENSITIVE_ORDER).reversed();
+            default -> Comparator.comparing(Note::getUpdatedAt).reversed();
+        };
+
+        sortedNotes.setComparator(comparator);
+    }
+
+    private void setupSelectionListener() {
+
+        notesListView.getSelectionModel().selectedItemProperty().addListener((obs, oldNote, newNote) -> {
+
+            if (oldNote != null) {
+                saveCurrentNoteSilently();
             }
+
+            if (newNote == null) {
+                currentNote.set(null);
+                clearEditor();
+                return;
+            }
+
+            currentNote.set(newNote);
+            loadNote(newNote);
         });
-
-        // Входящие связи
-        incomingLinksListView.setCellFactory(param -> new ListCell<>() {
-            @Override
-            protected void updateItem(Note note, boolean empty) {
-                super.updateItem(note, empty);
-                if (empty || note == null) {
-                    setText(null);
-                } else {
-                    setText("← " + note.getTitle());
-                }
-            }
-        });
     }
 
-    /**
-     * Настройка кнопок переключения режимов.
-     */
-    private void setupToggleButtons() {
-        ToggleGroup modeGroup = new ToggleGroup();
-        editModeButton.setToggleGroup(modeGroup);
-        previewModeButton.setToggleGroup(modeGroup);
-        editModeButton.setSelected(true);
-    }
-
-    /**
-     * Настройка автосохранения.
-     */
-    private void setupAutoSave() {
-        autoSaveTimer = new Timer(true);
-        autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                Platform.runLater(() -> {
-                    if (currentNote != null && !titleField.getText().trim().isEmpty()) {
-                        saveCurrentNote();
-                    }
-                });
-            }
-        }, 30000, 30000); // Каждые 30 секунд
-    }
-
-    /**
-     * Настройка WebView для предварительного просмотра.
-     */
-    private void setupWebView() {
-        webView = new WebView();
-        webView.setContextMenuEnabled(false);
-        previewPane.getChildren().add(webView);
-    }
-
-    /**
-     * Загрузка всех заметок.
-     */
-    @FXML
     private void loadAllNotes() {
-        List<Note> notes = noteService.getAllNotes();
-        ObservableList<Note> observableNotes = FXCollections.observableArrayList(notes);
-        notesListView.setItems(observableNotes);
-        updateNotesCount();
-        logger.debug("Загружено {} заметок", notes.size());
+        notes.setAll(noteService.getAllNotes());
+        notesCountLabel.setText(String.valueOf(notes.size()));
     }
 
-    /**
-     * Обновление счётчика заметок.
-     */
-    private void updateNotesCount() {
-        int count = noteService.getNotesCount();
-        notesCountLabel.setText(String.valueOf(count));
-    }
-
-    /**
-     * Обработчик выбора заметки из списка.
-     */
-    @FXML
-    private void handleNoteSelect() {
-        Note selectedNote = notesListView.getSelectionModel().getSelectedItem();
-        if (selectedNote != null) {
-            // Сохраняем текущую заметку перед переключением
-            if (currentNote != null) {
-                saveCurrentNote();
-            }
-            loadNote(selectedNote);
-        }
-    }
-
-    /**
-     * Загрузка заметки в редактор.
-     */
     private void loadNote(Note note) {
-        currentNote = note;
+
+        editorStackPane.setVisible(true);
+        editorStackPane.setManaged(true);
 
         titleField.setText(note.getTitle());
         contentTextArea.setText(note.getContent());
 
-        updateNoteInfo();
+        createdLabel.setText("Создана: " + note.getCreatedAt().format(DATE_FORMATTER));
+        updatedLabel.setText("Изменена: " + note.getUpdatedAt().format(DATE_FORMATTER));
+
         updateLinks();
 
-        if (!isEditMode) {
-            updatePreview();
-        }
-
-        statusBarLabel.setText("Заметка загружена: " + note.getTitle());
-        logger.debug("Загружена заметка: {}", note.getTitle());
+        if (!isEditMode) updatePreview();
     }
 
-    /**
-     * Обновление информации о заметке.
-     */
-    private void updateNoteInfo() {
-        if (currentNote == null) {
-            createdLabel.setText("");
-            updatedLabel.setText("");
-            linksCountLabel.setText("");
-            return;
-        }
+    private void saveCurrentNoteSilently() {
+        Note note = currentNote.get();
+        if (note == null) return;
 
-        createdLabel.setText("Создана: " + currentNote.getCreatedAt().format(DATE_FORMATTER));
-        updatedLabel.setText("Изменена: " + currentNote.getUpdatedAt().format(DATE_FORMATTER));
+        String title = titleField.getText().trim();
+        if (title.isEmpty()) return;
 
-        int outCount = linkService.getOutgoingLinksCount(currentNote.getId());
-        int inCount = linkService.getIncomingLinksCount(currentNote.getId());
-        linksCountLabel.setText("Связей: " + outCount + " исх., " + inCount + " вх.");
+        note.setTitle(title);
+        note.setContent(contentTextArea.getText());
+
+        noteService.updateNote(note);
+
+        notesListView.refresh();
+        autoSaveLabel.setText("✓ Сохранено");
     }
 
-    /**
-     * Обновление списков связей.
-     */
-    private void updateLinks() {
-        if (currentNote == null) {
-            outgoingLinksListView.setItems(FXCollections.observableArrayList());
-            incomingLinksListView.setItems(FXCollections.observableArrayList());
-            outgoingCountLabel.setText("(0)");
-            incomingCountLabel.setText("(0)");
-            return;
-        }
-
-        // Исходящие связи
-        List<Note> outgoing = linkService.getOutgoingLinkedNotes(currentNote.getId());
-        outgoingLinksListView.setItems(FXCollections.observableArrayList(outgoing));
-        outgoingCountLabel.setText("(" + outgoing.size() + ")");
-
-        // Входящие связи
-        List<Note> incoming = linkService.getIncomingLinkedNotes(currentNote.getId());
-        incomingLinksListView.setItems(FXCollections.observableArrayList(incoming));
-        incomingCountLabel.setText("(" + incoming.size() + ")");
+    @FXML
+    private void handleSave() {
+        saveCurrentNoteSilently();
     }
 
-    /**
-     * Сохранение текущей заметки.
-     */
-    private void saveCurrentNote() {
-        if (currentNote == null) {
-            return;
-        }
-
-        try {
-            String newTitle = titleField.getText().trim();
-            String newContent = contentTextArea.getText();
-
-            if (newTitle.isEmpty()) {
-                showWarning("Заголовок не может быть пустым");
-                return;
-            }
-
-            currentNote.setTitle(newTitle);
-            currentNote.setContent(newContent);
-
-            currentNote = noteService.updateNote(currentNote);
-
-            // Обновляем список заметок
-            loadAllNotes();
-
-            // Находим и выделяем обновлённую заметку
-            for (Note note : notesListView.getItems()) {
-                if (note.getId().equals(currentNote.getId())) {
-                    notesListView.getSelectionModel().select(note);
-                    break;
-                }
-            }
-
-            updateNoteInfo();
-            updateLinks();
-
-            autoSaveLabel.setText("✓ Сохранено " + java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
-
-            // Убираем метку через 2 секунды
-            Timer timer = new Timer(true);
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    Platform.runLater(() -> autoSaveLabel.setText(""));
-                }
-            }, 2000);
-
-        } catch (Exception e) {
-            logger.error("Ошибка при сохранении заметки", e);
-            showError("Ошибка сохранения", e.getMessage());
-        }
-    }
-
-    /**
-     * Создание новой заметки.
-     */
     @FXML
     private void handleNewNote() {
+
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Новая заметка");
-        dialog.setHeaderText("Создание новой заметки");
-        dialog.setContentText("Введите заголовок:");
+        dialog.setHeaderText("Введите заголовок");
 
         Optional<String> result = dialog.showAndWait();
+
         result.ifPresent(title -> {
-            try {
-                Note newNote = noteService.createNote(title, "");
-                loadAllNotes();
 
-                // Находим и выделяем новую заметку
-                for (Note note : notesListView.getItems()) {
-                    if (note.getId().equals(newNote.getId())) {
-                        notesListView.getSelectionModel().select(note);
-                        loadNote(note);
-                        contentTextArea.requestFocus();
-                        break;
-                    }
-                }
+            Note newNote = noteService.createNote(title, "");
+            notes.add(newNote);
 
-                statusBarLabel.setText("Создана новая заметка: " + title);
-            } catch (Exception e) {
-                logger.error("Ошибка при создании заметки", e);
-                showError("Ошибка создания заметки", e.getMessage());
-            }
+            notesListView.getSelectionModel().select(newNote);
         });
     }
 
-    /**
-     * Удаление заметки.
-     */
     @FXML
     private void handleDeleteNote() {
-        Note selectedNote = notesListView.getSelectionModel().getSelectedItem();
-        if (selectedNote == null) {
-            showWarning("Выберите заметку для удаления");
-            return;
-        }
 
-        Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
-        confirmation.setTitle("Подтверждение удаления");
-        confirmation.setHeaderText("Удалить заметку?");
-        confirmation.setContentText("Заметка \"" + selectedNote.getTitle() + "\" будет удалена безвозвратно.");
+        Note selected = notesListView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
 
-        Optional<ButtonType> result = confirmation.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            try {
-                noteService.deleteNote(selectedNote.getId());
+        noteService.deleteNote(selected.getId());
+        notes.remove(selected);
 
-                if (currentNote != null && currentNote.getId().equals(selectedNote.getId())) {
-                    currentNote = null;
-                    titleField.clear();
-                    contentTextArea.clear();
-                    updateNoteInfo();
-                    updateLinks();
-                }
-
-                loadAllNotes();
-                statusBarLabel.setText("Заметка удалена: " + selectedNote.getTitle());
-            } catch (Exception e) {
-                logger.error("Ошибка при удалении заметки", e);
-                showError("Ошибка удаления", e.getMessage());
-            }
-        }
+        notesListView.getSelectionModel().clearSelection();
     }
 
-    /**
-     * Поиск заметок.
-     */
     @FXML
     private void handleSearch() {
+
         String query = searchField.getText().trim();
 
         if (query.isEmpty()) {
@@ -436,105 +234,123 @@ public class MainController {
         }
 
         List<Note> results = searchService.search(query);
-        notesListView.setItems(FXCollections.observableArrayList(results));
-        statusBarLabel.setText("Найдено заметок: " + results.size());
+        notes.setAll(results);
     }
 
-    /**
-     * Переключение режима редактирование/просмотр.
-     */
+    private void setupWebView() {
+        webView = new WebView();
+        previewPane.getChildren().add(webView);
+    }
+
     @FXML
     private void handleModeToggle() {
+
         isEditMode = editModeButton.isSelected();
 
-        contentTextArea.setManaged(isEditMode);
         contentTextArea.setVisible(isEditMode);
+        contentTextArea.setManaged(isEditMode);
 
-        previewScrollPane.setManaged(!isEditMode);
         previewScrollPane.setVisible(!isEditMode);
+        previewScrollPane.setManaged(!isEditMode);
 
-        if (!isEditMode) {
-            updatePreview();
-        }
+        if (!isEditMode) updatePreview();
 
         menuPreviewMode.setSelected(!isEditMode);
     }
 
-    /**
-     * Обновление предварительного просмотра.
-     */
     private void updatePreview() {
-        String content = contentTextArea.getText();
-        String html = markdownRenderer.renderToHtml(content);
-        webView.getEngine().loadContent(html);
+
+        String html = markdownRenderer.renderToHtml(contentTextArea.getText());
+
+        String styledHtml = """
+                <html>
+                <head>
+                <style>
+                    body {
+                        font-family: Arial;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                    }
+                </style>
+                </head>
+                <body>
+                """ + html + """
+                </body>
+                </html>
+                """;
+
+        webView.getEngine().loadContent(styledHtml);
     }
 
-    /**
-     * Обработчик клика по связям.
-     */
-    @FXML
-    private void handleLinkClick() {
-        // Проверяем, откуда был клик
-        Note selectedNote = null;
+    private void updateLinks() {
 
-        if (outgoingLinksListView.isFocused()) {
-            selectedNote = outgoingLinksListView.getSelectionModel().getSelectedItem();
-        } else if (incomingLinksListView.isFocused()) {
-            selectedNote = incomingLinksListView.getSelectionModel().getSelectedItem();
-        }
+        Note note = currentNote.get();
+        if (note == null) return;
 
-        if (selectedNote != null) {
-            // Находим заметку в списке и открываем
-            for (Note note : notesListView.getItems()) {
-                if (note.getId().equals(selectedNote.getId())) {
-                    notesListView.getSelectionModel().select(note);
-                    loadNote(note);
-                    break;
-                }
+        outgoingLinksListView.setItems(
+                FXCollections.observableArrayList(
+                        linkService.getOutgoingLinkedNotes(note.getId())
+                )
+        );
+
+        incomingLinksListView.setItems(
+                FXCollections.observableArrayList(
+                        linkService.getIncomingLinkedNotes(note.getId())
+                )
+        );
+
+        linksCountLabel.setText("Связей: "
+                + outgoingLinksListView.getItems().size()
+                + " / "
+                + incomingLinksListView.getItems().size());
+    }
+
+    private void setupAutoSave() {
+
+        autoSaveTimer = new Timer(true);
+
+        autoSaveTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Platform.runLater(() -> saveCurrentNoteSilently());
             }
-        }
+        }, 30000, 30000);
     }
 
-    /**
-     * Обновление списка заметок.
-     */
-    @FXML
-    private void handleRefreshNotes() {
-        loadAllNotes();
-        statusBarLabel.setText("Список заметок обновлён");
+    public void shutdown() {
+        if (autoSaveTimer != null) autoSaveTimer.cancel();
+        saveCurrentNoteSilently();
     }
 
-    /**
-     * Обработчик изменения сортировки.
-     */
-    @FXML
-    private void handleSortChange() {
-        // TODO: Реализовать различные варианты сортировки
-        loadAllNotes();
+    // ============================================================
+    // UTILS
+    // ============================================================
+
+    private void clearEditor() {
+        titleField.clear();
+        contentTextArea.clear();
+
+        editorStackPane.setVisible(false);
+        editorStackPane.setManaged(false);
+
+        createdLabel.setText("");
+        updatedLabel.setText("");
+        linksCountLabel.setText("");
     }
 
-    /**
-     * Показать граф.
-     */
     @FXML
-    private void handleShowGraph() {
-        // TODO: Реализовать окно с графом
-        showInfo("Граф заметок", "Визуализация графа будет реализована в следующей версии");
+    private void handleExport() {
+        showInfo("Экспорт", "Функция экспорта будет реализована позже.");
     }
 
-    /**
-     * Обработчики меню.
-     */
     @FXML
-    private void handleSave() {
-        saveCurrentNote();
+    private void handleImport() {
+        showInfo("Импорт", "Функция импорта будет реализована позже.");
     }
 
     @FXML
     private void handleExit() {
-        if (currentNote != null) {
-            saveCurrentNote();
-        }
+        shutdown();
         Platform.exit();
     }
 
@@ -545,76 +361,55 @@ public class MainController {
 
     @FXML
     private void handleTogglePreview() {
+
         if (menuPreviewMode.isSelected()) {
             previewModeButton.setSelected(true);
         } else {
             editModeButton.setSelected(true);
         }
-        handleModeToggle();
     }
 
     @FXML
     private void handleToggleGraph() {
-        // TODO: Реализовать переключение графа
+        showInfo("Граф заметок", "Визуализация графа будет добавлена позже.");
     }
 
     @FXML
     private void handleLightTheme() {
-        // TODO: Реализовать смену темы
+        showInfo("Тема", "Светлая тема будет реализована позже.");
     }
 
     @FXML
     private void handleDarkTheme() {
-        // TODO: Реализовать смену темы
+        showInfo("Тема", "Тёмная тема будет реализована позже.");
     }
 
     @FXML
-    private void handleExport() {
-        // TODO: Реализовать экспорт
-        showInfo("Экспорт", "Функция экспорта будет реализована в следующей версии");
+    private void handleRefreshNotes() {
+        loadAllNotes();
     }
 
     @FXML
-    private void handleImport() {
-        // TODO: Реализовать импорт
-        showInfo("Импорт", "Функция импорта будет реализована в следующей версии");
+    private void handleSortChange() {
+        applySort();
     }
+
+    // ИСПРАВЛЕНО: Метод handleNoteSelect() полностью удален
+    // Логика выбора заметки теперь полностью обрабатывается через setupSelectionListener()
 
     @FXML
-    private void handleAbout() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("О программе");
-        alert.setHeaderText("NoteGraph v1.1.0 SNAPSHOT");
-        alert.setContentText(
-                "Система управления персональной базой знаний\n\n" +
-                        "Возможности:\n" +
-                        "• Создание взаимосвязанных заметок\n" +
-                        "• Поддержка Markdown\n" +
-                        "• Вики-ссылки [[название]]\n" +
-                        "• Полнотекстовый поиск\n" +
-                        "• Визуализация графа знаний\n\n" +
-                        "© 2026 Дипломная работа"
-        );
-        alert.showAndWait();
-    }
+    private void handleLinkClick() {
+        Note selected = null;
 
-    /**
-     * Вспомогательные методы для диалогов.
-     */
-    private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
+        if (outgoingLinksListView.isFocused()) {
+            selected = outgoingLinksListView.getSelectionModel().getSelectedItem();
+        } else if (incomingLinksListView.isFocused()) {
+            selected = incomingLinksListView.getSelectionModel().getSelectedItem();
+        }
 
-    private void showWarning(String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Предупреждение");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        if (selected != null) {
+            notesListView.getSelectionModel().select(selected);
+        }
     }
 
     private void showInfo(String title, String message) {
@@ -625,15 +420,66 @@ public class MainController {
         alert.showAndWait();
     }
 
-    /**
-     * Очистка ресурсов при закрытии.
-     */
-    public void shutdown() {
-        if (autoSaveTimer != null) {
-            autoSaveTimer.cancel();
+    @FXML
+    private void handleAbout() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("О программе");
+        alert.setHeaderText("NoteGraph");
+        alert.setContentText(
+                "NoteGraph v1.1.1\n\n" +
+                        "Система управления персональной базой знаний.\n\n" +
+                        "Поддержка Markdown\n" +
+                        "Вики-ссылки [[название]]\n" +
+                        "Поиск и связи между заметками\n\n" +
+                        "© 2026 Дипломная работа"
+        );
+        alert.showAndWait();
+    }
+
+    @FXML
+    private void handleShowGraph() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Граф заметок");
+        alert.setHeaderText(null);
+        alert.setContentText("Визуализация графа будет реализована позже.");
+        alert.showAndWait();
+    }
+
+    private void setupToggleGroup() {
+
+        modeToggleGroup = new ToggleGroup();
+
+        editModeButton.setToggleGroup(modeToggleGroup);
+        previewModeButton.setToggleGroup(modeToggleGroup);
+
+        // по умолчанию режим редактирования
+        editModeButton.setSelected(true);
+        isEditMode = true;
+
+        modeToggleGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+
+            if (newToggle == editModeButton) {
+                isEditMode = true;
+            } else if (newToggle == previewModeButton) {
+                isEditMode = false;
+            }
+
+            updateModeUI();
+        });
+    }
+
+    private void updateModeUI() {
+
+        contentTextArea.setVisible(isEditMode);
+        contentTextArea.setManaged(isEditMode);
+
+        previewScrollPane.setVisible(!isEditMode);
+        previewScrollPane.setManaged(!isEditMode);
+
+        if (!isEditMode) {
+            updatePreview();
         }
-        if (currentNote != null) {
-            saveCurrentNote();
-        }
+
+        menuPreviewMode.setSelected(!isEditMode);
     }
 }
