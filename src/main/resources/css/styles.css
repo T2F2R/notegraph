@@ -1,0 +1,175 @@
+/* ===== ОБЩИЕ СТИЛИ ===== */
+.root {
+    -fx-font-family: "Segoe UI", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #ffffff;
+}
+
+/* ===== МЕНЮ И ПАНЕЛЬ ИНСТРУМЕНТОВ ===== */
+.menu-bar {
+    -fx-background-color: #f8f9fa;
+}
+
+.tool-bar {
+    -fx-background-color: #f8f9fa;
+    -fx-border-color: #dee2e6;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* ===== КНОПКИ ===== */
+.button {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #ced4da;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 5 15 5 15;
+}
+
+.button:hover {
+    -fx-background-color: #e9ecef;
+}
+
+.button:pressed {
+    -fx-background-color: #dee2e6;
+}
+
+/* ===== ТЕКСТОВЫЕ ПОЛЯ ===== */
+.text-field {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #ced4da;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 5;
+}
+
+.text-field:focused {
+    -fx-border-color: #80bdff;
+    -fx-border-width: 2;
+}
+
+.text-area {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #ced4da;
+    -fx-padding: 10;
+    -fx-font-family: "JetBrains Mono", "Consolas", monospace;
+    -fx-font-size: 13px;
+}
+
+.text-area:focused {
+    -fx-border-color: #80bdff;
+}
+
+.text-area .content {
+    -fx-background-color: #ffffff;
+}
+
+/* ===== ДЕРЕВО ФАЙЛОВ ===== */
+.tree-view {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #dee2e6;
+    -fx-border-width: 0 1 0 0;
+}
+
+.tree-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 3 3 3 5;
+}
+
+.tree-cell:selected {
+    -fx-background-color: #e7f3ff;
+    -fx-text-fill: #000000;
+}
+
+.tree-cell:hover {
+    -fx-background-color: #f0f0f0;
+}
+
+/* ===== ВКЛАДКИ ===== */
+.tab-pane {
+    -fx-background-color: #ffffff;
+}
+
+.tab {
+    -fx-background-color: #f8f9fa;
+    -fx-border-color: #dee2e6;
+    -fx-border-width: 1 1 0 1;
+    -fx-padding: 5 15 5 15;
+}
+
+.tab:selected {
+    -fx-background-color: #ffffff;
+    -fx-border-width: 1 1 0 1;
+}
+
+.tab .tab-label {
+    -fx-text-fill: #495057;
+}
+
+.tab:selected .tab-label {
+    -fx-text-fill: #000000;
+    -fx-font-weight: bold;
+}
+
+/* ===== TOGGLE BUTTONS (режимы редактирования/просмотра) ===== */
+.toggle-button {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #ced4da;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 5 15 5 15;
+}
+
+.toggle-button:selected {
+    -fx-background-color: #007bff;
+    -fx-text-fill: white;
+}
+
+.toggle-button:hover {
+    -fx-background-color: #e9ecef;
+}
+
+.toggle-button:selected:hover {
+    -fx-background-color: #0056b3;
+}
+
+/* ===== COMBO BOX ===== */
+.combo-box {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #ced4da;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+/* ===== SCROLL PANE ===== */
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: #ffffff;
+}
+
+/* ===== SPLIT PANE ===== */
+.split-pane {
+    -fx-background-color: #ffffff;
+}
+
+.split-pane-divider {
+    -fx-background-color: #dee2e6;
+    -fx-padding: 0 1 0 1;
+}
+
+/* ===== WEBVIEW ===== */
+.web-view {
+    -fx-background-color: #ffffff;
+}
+
+/* ===== LABELS ===== */
+.label {
+    -fx-text-fill: #212529;
+}
+
+/* ===== SEPARATOR ===== */
+.separator {
+    -fx-background-color: #dee2e6;
+}

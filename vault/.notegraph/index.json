@@ -1,0 +1,13 @@
+{
+  "outgoing": {
+    "dfgsgs": [],
+    "Привет": [
+      "dfgsgs"
+    ]
+  },
+  "backlinks": {
+    "dfgsgs": [
+      "Привет"
+    ]
+  }
+}
