@@ -17,28 +17,28 @@ import java.util.List;
 public class FileSystemManager {
     private static final Logger logger = LoggerFactory.getLogger(FileSystemManager.class);
     private static FileSystemManager instance;
-    
+
     private final Path vaultPath;
     private final Path metadataPath;
-    
+
     private static final String VAULT_DIR = "vault";
     private static final String METADATA_DIR = ".notegraph";
     private static final String METADATA_FILE = "metadata.json";
     private static final String INDEX_FILE = "index.json";
-    
+
     private FileSystemManager() {
         this.vaultPath = Paths.get(VAULT_DIR);
         this.metadataPath = vaultPath.resolve(METADATA_DIR);
         initializeVault();
     }
-    
+
     public static synchronized FileSystemManager getInstance() {
         if (instance == null) {
             instance = new FileSystemManager();
         }
         return instance;
     }
-    
+
     /**
      * Инициализирует структуру vault
      */
@@ -49,67 +49,67 @@ public class FileSystemManager {
                 Files.createDirectories(vaultPath);
                 logger.info("Создана директория vault: {}", vaultPath.toAbsolutePath());
             }
-            
+
             // Создаем скрытую директорию для метаданных
             if (!Files.exists(metadataPath)) {
                 Files.createDirectories(metadataPath);
-                
+
                 // Инициализируем пустые файлы метаданных
                 Path metadataFile = metadataPath.resolve(METADATA_FILE);
                 Path indexFile = metadataPath.resolve(INDEX_FILE);
-                
+
                 if (!Files.exists(metadataFile)) {
                     Files.writeString(metadataFile, "{}");
                 }
                 if (!Files.exists(indexFile)) {
                     Files.writeString(indexFile, "{}");
                 }
-                
+
                 logger.info("Создана директория метаданных: {}", metadataPath.toAbsolutePath());
             }
-            
+
             logger.info("Vault инициализирован: {}", vaultPath.toAbsolutePath());
         } catch (IOException e) {
             logger.error("Ошибка при инициализации vault", e);
             throw new RuntimeException("Не удалось инициализировать vault", e);
         }
     }
-    
+
     /**
      * Получить корневой путь vault
      */
     public Path getVaultPath() {
         return vaultPath;
     }
-    
+
     /**
      * Получить путь к директории метаданных
      */
     public Path getMetadataPath() {
         return metadataPath;
     }
-    
+
     /**
      * Получить путь к файлу метаданных
      */
     public Path getMetadataFile() {
         return metadataPath.resolve(METADATA_FILE);
     }
-    
+
     /**
      * Получить путь к файлу индекса
      */
     public Path getIndexFile() {
         return metadataPath.resolve(INDEX_FILE);
     }
-    
+
     /**
      * Проверить, является ли путь заметкой (.md файл)
      */
     public boolean isNote(Path path) {
         return Files.isRegularFile(path) && path.toString().endsWith(".md");
     }
-    
+
     /**
      * Проверить, является ли путь папкой (исключая скрытые)
      */
@@ -120,30 +120,30 @@ public class FileSystemManager {
         String name = path.getFileName().toString();
         return !name.startsWith(".");
     }
-    
+
     /**
      * Получить все заметки в vault рекурсивно
      */
     public List<Path> getAllNotes() throws IOException {
         List<Path> notes = new ArrayList<>();
         Files.walk(vaultPath)
-            .filter(this::isNote)
-            .forEach(notes::add);
+                .filter(this::isNote)
+                .forEach(notes::add);
         return notes;
     }
-    
+
     /**
      * Получить все папки в vault рекурсивно
      */
     public List<Path> getAllFolders() throws IOException {
         List<Path> folders = new ArrayList<>();
         Files.walk(vaultPath)
-            .filter(this::isFolder)
-            .filter(p -> !p.equals(vaultPath)) // Исключаем корневую директорию
-            .forEach(folders::add);
+                .filter(this::isFolder)
+                .filter(p -> !p.equals(vaultPath)) // Исключаем корневую директорию
+                .forEach(folders::add);
         return folders;
     }
-    
+
     /**
      * Получить дочерние элементы директории (только прямые потомки)
      */
@@ -151,7 +151,7 @@ public class FileSystemManager {
         if (!Files.isDirectory(directory)) {
             return new ArrayList<>();
         }
-        
+
         List<Path> children = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
             for (Path path : stream) {
@@ -162,7 +162,7 @@ public class FileSystemManager {
         }
         return children;
     }
-    
+
     /**
      * Создать новую заметку
      */
@@ -170,41 +170,41 @@ public class FileSystemManager {
         // Очищаем название от недопустимых символов
         String safeName = sanitizeFileName(title);
         Path notePath = parentFolder.resolve(safeName + ".md");
-        
+
         // Если файл уже существует, добавляем числовой суффикс
         int counter = 1;
         while (Files.exists(notePath)) {
             notePath = parentFolder.resolve(safeName + " " + counter + ".md");
             counter++;
         }
-        
+
         // Создаем файл с frontmatter
         String content = generateFrontmatter(title) + "\n\n";
         Files.writeString(notePath, content);
-        
+
         logger.info("Создана заметка: {}", notePath);
         return notePath;
     }
-    
+
     /**
      * Создать новую папку
      */
     public Path createFolder(String name, Path parentFolder) throws IOException {
         String safeName = sanitizeFileName(name);
         Path folderPath = parentFolder.resolve(safeName);
-        
+
         // Если папка уже существует, добавляем числовой суффикс
         int counter = 1;
         while (Files.exists(folderPath)) {
             folderPath = parentFolder.resolve(safeName + " " + counter);
             counter++;
         }
-        
+
         Files.createDirectories(folderPath);
         logger.info("Создана папка: {}", folderPath);
         return folderPath;
     }
-    
+
     /**
      * Переименовать файл или папку
      */
@@ -213,14 +213,14 @@ public class FileSystemManager {
         if (isNote(path) && !safeName.endsWith(".md")) {
             safeName += ".md";
         }
-        
+
         Path newPath = path.getParent().resolve(safeName);
         Files.move(path, newPath, StandardCopyOption.REPLACE_EXISTING);
-        
+
         logger.info("Переименовано: {} -> {}", path, newPath);
         return newPath;
     }
-    
+
     /**
      * Переместить файл или папку
      */
@@ -228,14 +228,14 @@ public class FileSystemManager {
         if (!Files.isDirectory(targetFolder)) {
             throw new IllegalArgumentException("Target must be a directory");
         }
-        
+
         Path newPath = targetFolder.resolve(source.getFileName());
         Files.move(source, newPath, StandardCopyOption.REPLACE_EXISTING);
-        
+
         logger.info("Перемещено: {} -> {}", source, newPath);
         return newPath;
     }
-    
+
     /**
      * Удалить файл или папку
      */
@@ -243,31 +243,31 @@ public class FileSystemManager {
         if (Files.isDirectory(path)) {
             // Рекурсивное удаление директории
             Files.walk(path)
-                .sorted((a, b) -> -a.compareTo(b)) // Обратный порядок для удаления детей перед родителями
-                .forEach(p -> {
-                    try {
-                        Files.delete(p);
-                    } catch (IOException e) {
-                        logger.error("Ошибка при удалении: {}", p, e);
-                    }
-                });
+                    .sorted((a, b) -> -a.compareTo(b)) // Обратный порядок для удаления детей перед родителями
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException e) {
+                            logger.error("Ошибка при удалении: {}", p, e);
+                        }
+                    });
         } else {
             Files.delete(path);
         }
-        
+
         logger.info("Удалено: {}", path);
     }
-    
+
     /**
      * Получить время последнего изменения файла
      */
     public LocalDateTime getLastModified(Path path) throws IOException {
         return LocalDateTime.ofInstant(
-            Files.getLastModifiedTime(path).toInstant(),
-            ZoneId.systemDefault()
+                Files.getLastModifiedTime(path).toInstant(),
+                ZoneId.systemDefault()
         );
     }
-    
+
     /**
      * Получить время создания файла
      */
@@ -279,7 +279,7 @@ public class FileSystemManager {
                 ZoneId.systemDefault()
         );
     }
-    
+
     /**
      * Очистить имя файла от недопустимых символов
      */
@@ -287,16 +287,16 @@ public class FileSystemManager {
         // Удаляем недопустимые символы для имени файла
         return name.replaceAll("[\\\\/:*?\"<>|]", "").trim();
     }
-    
+
     /**
      * Генерировать YAML frontmatter для заметки
      */
     private String generateFrontmatter(String title) {
         return "---\n" +
-               "title: \"" + title + "\"\n" +
-               "created: " + LocalDateTime.now() + "\n" +
-               "modified: " + LocalDateTime.now() + "\n" +
-               "tags: []\n" +
-               "---";
+                "title: \"" + title + "\"\n" +
+                "created: " + LocalDateTime.now() + "\n" +
+                "modified: " + LocalDateTime.now() + "\n" +
+                "tags: []\n" +
+                "---";
     }
 }

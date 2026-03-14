@@ -31,14 +31,12 @@ public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-    // Services
     private final NoteServiceImpl noteService = new NoteServiceImpl();
     private final MarkdownRenderer markdownRenderer = new MarkdownRenderer();
     private final FileSystemManager fsManager = FileSystemManager.getInstance();
     private final MetadataManager metadataManager = MetadataManager.getInstance();
     private final LinkIndexManager linkIndexManager = LinkIndexManager.getInstance();
 
-    // UI Components
     @FXML private Label notesCountLabel;
     @FXML private ComboBox<String> sortComboBox;
     @FXML private TextField searchField;
@@ -48,13 +46,11 @@ public class MainController {
     @FXML private VBox placeholderPane;
     @FXML private TreeView<Path> notesTreeView;
 
-    // State
     private final Map<Path, Tab> openTabs = new HashMap<>();
     private Timer autoSaveTimer;
     private String currentSearchQuery = "";
-    private Path cutPath = null; // Для вырезать/вставить
+    private Path cutPath = null;
 
-    // Inner class for tab content
     private static class NoteTabContent {
         VBox container;
         TextField titleField;
@@ -72,7 +68,6 @@ public class MainController {
         boolean isEditMode = true;
     }
 
-    // JavaScript bridge
     public class LinkClickHandler {
         public void openNote(String noteTitle) {
             logger.debug("LinkClickHandler.openNote: {}", noteTitle);
@@ -109,86 +104,30 @@ public class MainController {
                 if (empty || path == null) {
                     setText(null);
                     setGraphic(null);
-                    setStyle("");
                 } else {
-                    HBox hbox = new HBox(5);
-                    hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-
-                    Label icon = new Label();
-                    Label nameLabel = new Label();
-
                     if (Files.isDirectory(path)) {
-                        icon.setText("▶");
-                        icon.setStyle("-fx-font-size: 10px; -fx-text-fill: #8b8b8b;");
-
-                        String folderName;
+                        // Папка
                         if (path.equals(fsManager.getVaultPath())) {
-                            folderName = "📚 " + path.getFileName().toString();
-                            nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #d4d4d4;");
+                            setText("📚 " + path.getFileName().toString());
                         } else {
-                            folderName = path.getFileName().toString();
-                            nameLabel.setStyle("-fx-font-weight: normal; -fx-text-fill: #cccccc;");
+                            setText(path.getFileName().toString());
                         }
-
-                        nameLabel.setText(folderName);
-
-                        TreeItem<Path> treeItem = getTreeItem();
-                        if (treeItem != null) {
-                            if (treeItem.isExpanded()) {
-                                icon.setText("▼");
-                            }
-                            treeItem.expandedProperty().addListener((obs, wasExpanded, isExpanded) -> {
-                                icon.setText(isExpanded ? "▼" : "▶");
-                            });
-                        }
-
+                        setStyle("-fx-font-weight: bold;");
                     } else if (fsManager.isNote(path)) {
+                        // Заметка
                         String fileName = path.getFileName().toString();
                         String name = fileName.replaceAll("\\.md$", "");
 
                         String relativePath = fsManager.getVaultPath().relativize(path).toString();
                         boolean bookmarked = metadataManager.isBookmarked(relativePath);
 
-                        if (bookmarked) {
-                            icon.setText("★");
-                            icon.setStyle("-fx-font-size: 12px; -fx-text-fill: #ffd700;");
-                        } else {
-                            icon.setText("○");
-                            icon.setStyle("-fx-font-size: 10px; -fx-text-fill: #8b8b8b;");
-                        }
-
-                        nameLabel.setText(name);
-                        nameLabel.setStyle("-fx-text-fill: #cccccc;");
+                        setText((bookmarked ? "★ " : "") + name);
+                        setStyle("-fx-font-weight: normal;");
                     }
-
-                    hbox.getChildren().addAll(icon, nameLabel);
-                    setGraphic(hbox);
-                    setText(null);
-                    setStyle("-fx-background-color: transparent; -fx-padding: 2 5 2 5;");
-                }
-
-                if (isSelected()) {
-                    setStyle("-fx-background-color: #37373d; -fx-padding: 2 5 2 5;");
-                }
-            }
-
-            @Override
-            public void updateSelected(boolean selected) {
-                super.updateSelected(selected);
-                if (selected) {
-                    setStyle("-fx-background-color: #37373d; -fx-padding: 2 5 2 5;");
-                } else {
-                    setStyle("-fx-background-color: transparent; -fx-padding: 2 5 2 5;");
+                    setGraphic(null);
                 }
             }
         });
-
-        notesTreeView.setStyle(
-                "-fx-background-color: #252526;" +
-                        "-fx-border-color: transparent;" +
-                        "-fx-focus-color: transparent;" +
-                        "-fx-faint-focus-color: transparent;"
-        );
 
         notesTreeView.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
@@ -202,8 +141,10 @@ public class MainController {
             }
         });
 
+        // Контекстное меню
         notesTreeView.setContextMenu(createTreeContextMenu());
 
+        // Горячие клавиши
         notesTreeView.setOnKeyPressed(event -> {
             if (event.isControlDown()) {
                 if (event.getCode() == javafx.scene.input.KeyCode.X) {
@@ -336,33 +277,53 @@ public class MainController {
     }
 
     private void openNoteInCurrentTab(Note note) {
+        // Проверяем, не открыта ли уже эта заметка в какой-то вкладке
+        if (openTabs.containsKey(note.getPath())) {
+            Tab existingTab = openTabs.get(note.getPath());
+            notesTabPane.getSelectionModel().select(existingTab);
+            logger.debug("Заметка уже открыта, переключаемся на вкладку: {}", note.getTitle());
+            return;
+        }
+
         Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
 
+        // Если нет текущей вкладки или это вкладка "+", открываем в новой вкладке
         if (currentTab == null || "PLUS_TAB".equals(currentTab.getUserData())) {
             openNoteInTab(note);
             return;
         }
 
-        if (openTabs.containsKey(note.getPath())) {
-            notesTabPane.getSelectionModel().select(openTabs.get(note.getPath()));
-            return;
-        }
-
+        // Сохраняем старую заметку и удаляем её из openTabs
         if (currentTab.getUserData() instanceof NoteTabContent) {
-            saveNoteContent((NoteTabContent) currentTab.getUserData());
-            openTabs.remove(((NoteTabContent) currentTab.getUserData()).note.getPath());
+            NoteTabContent oldContent = (NoteTabContent) currentTab.getUserData();
+            saveNoteContent(oldContent);
+            openTabs.remove(oldContent.note.getPath());
+            logger.debug("Закрываем старую заметку из вкладки: {}", oldContent.note.getTitle());
         }
 
+        // Создаем новое содержимое для текущей вкладки
         NoteTabContent newContent = createTabContent(note);
         currentTab.setText(note.getTitle());
         currentTab.setContent(newContent.container);
         currentTab.setUserData(newContent);
+
+        // Обновляем обработчик закрытия вкладки
+        currentTab.setOnClosed(e -> {
+            saveNoteContent(newContent);
+            openTabs.remove(note.getPath());
+            logger.debug("Вкладка закрыта, удаляем из openTabs: {}", note.getTitle());
+        });
+
         openTabs.put(note.getPath(), currentTab);
+        logger.debug("Заметка открыта в текущей вкладке: {}", note.getTitle());
     }
 
     private void openNoteInTab(Note note) {
+        // Проверяем, не открыта ли уже
         if (openTabs.containsKey(note.getPath())) {
-            notesTabPane.getSelectionModel().select(openTabs.get(note.getPath()));
+            Tab existingTab = openTabs.get(note.getPath());
+            notesTabPane.getSelectionModel().select(existingTab);
+            logger.debug("Заметка уже открыта в вкладке, переключаемся: {}", note.getTitle());
             return;
         }
 
@@ -373,11 +334,13 @@ public class MainController {
         tab.setOnClosed(e -> {
             saveNoteContent(content);
             openTabs.remove(note.getPath());
+            logger.debug("Вкладка закрыта, удаляем из openTabs: {}", note.getTitle());
         });
 
         openTabs.put(note.getPath(), tab);
         notesTabPane.getTabs().add(notesTabPane.getTabs().size() - 1, tab);
         notesTabPane.getSelectionModel().select(tab);
+        logger.debug("Создана новая вкладка для заметки: {}", note.getTitle());
     }
 
     private NoteTabContent createTabContent(Note note) {
@@ -408,20 +371,27 @@ public class MainController {
         content.titleField.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-padding: 10;");
         content.titleField.setPromptText("Название заметки...");
 
+        // Сохраняем оригинальное название для сравнения
+        final String[] originalTitle = {note.getTitle()};
+
         content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.trim().isEmpty() && !newVal.equals(note.getTitle())) {
-                content.note.setTitle(newVal);
-                content.note.getFrontmatter().put("title", newVal);
+            if (newVal != null && !newVal.trim().isEmpty()) {
+                // Обновляем только UI, но НЕ модель заметки
                 Tab tab = openTabs.get(note.getPath());
-                if (tab != null) tab.setText(newVal);
+                if (tab != null) {
+                    tab.setText(newVal);
+                }
             }
         });
 
         content.titleField.focusedProperty().addListener((obs, was, is) -> {
             if (!is && was) {
                 String newTitle = content.titleField.getText().trim();
-                if (!newTitle.isEmpty() && !newTitle.equals(note.getTitle())) {
+                if (!newTitle.isEmpty() && !newTitle.equals(originalTitle[0])) {
+                    // Переименовываем файл
                     renameNoteFile(content, newTitle);
+                    // Обновляем оригинальное название после успешного переименования
+                    originalTitle[0] = newTitle;
                 }
             }
         });
@@ -441,17 +411,14 @@ public class MainController {
         content.webView.setPrefHeight(600);
         content.webView.getEngine().setJavaScriptEnabled(true);
 
-        content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, old, state) -> {
-            if (state == javafx.concurrent.Worker.State.SUCCEEDED) {
+        content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+            if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
                     JSObject window = (JSObject) content.webView.getEngine().executeScript("window");
-                    window.setMember("app", new Object() {
-                        public void openNote(String title) {
-                            Platform.runLater(() -> openOrCreateNote(title));
-                        }
-                    });
-                } catch (Exception e) {
-                    logger.error("Ошибка JS callback", e);
+                    window.setMember("app", new LinkClickHandler());
+                    logger.debug("JavaScript bridge установлен для заметки: {}", note.getTitle());
+                } catch (Exception ex) {
+                    logger.error("Ошибка установки JS bridge", ex);
                 }
             }
         });
@@ -513,13 +480,27 @@ public class MainController {
         try {
             Path oldPath = c.note.getPath();
             Note renamed = noteService.renameNote(c.note, newTitle);
+
+            // Обновляем ссылку на заметку в content
+            c.note = renamed;
+
+            // Обновляем openTabs
             Tab tab = openTabs.remove(oldPath);
             if (tab != null) {
                 openTabs.put(renamed.getPath(), tab);
                 tab.setText(newTitle);
+
+                // Обновляем обработчик закрытия для нового пути
+                tab.setOnClosed(e -> {
+                    saveNoteContent(c);
+                    openTabs.remove(renamed.getPath());
+                    logger.debug("Вкладка закрыта после переименования: {}", newTitle);
+                });
             }
+
             refreshTree();
             showAutoSaveIndicator();
+            logger.info("Файл переименован: {} -> {}", old, newTitle);
         } catch (Exception e) {
             logger.error("Ошибка переименования", e);
             showError("Ошибка", e.getMessage());
@@ -657,7 +638,9 @@ public class MainController {
     }
 
     private void refreshTree() {
-        setupTreeView();
+        TreeItem<Path> root = notesTreeView.getRoot();
+        root.getChildren().clear();
+        buildFileTree(fsManager.getVaultPath(), root);
     }
 
     private void updateNotesCount() {
