@@ -32,9 +32,9 @@ bin/
 logs/
 *.log
 
-# Vault и данные (опционально - можете коммитить vault/)
- vault/
- data/
+# Vault и данные
+vault/
+data/
 
 # Временные файлы
 *.swp

@@ -51,6 +51,31 @@ public class MainController {
     private String currentSearchQuery = "";
     private Path cutPath = null;
 
+    // Поиск
+    private ListView<SearchResult> searchResultsList;
+    private VBox searchPanel;
+    private boolean isSearchVisible = false;
+
+    // Inner class для результатов поиска
+    private static class SearchResult {
+        Path notePath;
+        String noteTitle;
+        String matchedLine;
+        int lineNumber;
+
+        SearchResult(Path notePath, String noteTitle, String matchedLine, int lineNumber) {
+            this.notePath = notePath;
+            this.noteTitle = noteTitle;
+            this.matchedLine = matchedLine;
+            this.lineNumber = lineNumber;
+        }
+
+        @Override
+        public String toString() {
+            return noteTitle + " (строка " + lineNumber + "): " + matchedLine;
+        }
+    }
+
     private static class NoteTabContent {
         VBox container;
         TextField titleField;
@@ -79,6 +104,7 @@ public class MainController {
     public void initialize() {
         logger.info("Инициализация MainController");
         setupTreeView();
+        setupSearch();
         setupSorting();
         setupAutoSave();
         setupTabPaneListener();
@@ -161,6 +187,50 @@ public class MainController {
         });
 
         logger.debug("TreeView настроен");
+    }
+
+    /**
+     * Настройка панели поиска
+     */
+    private void setupSearch() {
+        // Создаем панель результатов поиска
+        searchPanel = new VBox(5);
+        searchPanel.setPadding(new Insets(10));
+        searchPanel.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0;");
+        searchPanel.setVisible(false);
+        searchPanel.setManaged(false);
+
+        Label searchTitle = new Label("Результаты поиска");
+        searchTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+        searchResultsList = new ListView<>();
+        searchResultsList.setPrefHeight(200);
+        VBox.setVgrow(searchResultsList, Priority.ALWAYS);
+
+        // Обработчик клика по результату
+        searchResultsList.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                SearchResult result = searchResultsList.getSelectionModel().getSelectedItem();
+                if (result != null) {
+                    openNote(result.notePath);
+                }
+            }
+        });
+
+        Button closeSearchBtn = new Button("✕ Закрыть");
+        closeSearchBtn.setOnAction(e -> hideSearch());
+
+        HBox searchHeader = new HBox(10, searchTitle, new Region(), closeSearchBtn);
+        HBox.setHgrow(searchHeader.getChildren().get(1), Priority.ALWAYS);
+
+        searchPanel.getChildren().addAll(searchHeader, searchResultsList);
+
+        // Обработчик Enter в поле поиска
+        if (searchField != null) {
+            searchField.setOnAction(e -> handleSearch());
+        }
+
+        logger.debug("Поиск настроен");
     }
 
     private void buildFileTree(Path directory, TreeItem<Path> parentItem) {
@@ -926,8 +996,120 @@ public class MainController {
 
     @FXML
     private void handleSearch() {
-        if (searchField != null) {
-            currentSearchQuery = searchField.getText();
+        if (searchField == null || searchField.getText().trim().isEmpty()) {
+            hideSearch();
+            return;
+        }
+
+        String query = searchField.getText().trim().toLowerCase();
+        currentSearchQuery = query;
+
+        logger.info("Поиск: '{}'", query);
+
+        // Выполняем поиск в отдельном потоке
+        new Thread(() -> {
+            try {
+                List<SearchResult> results = performSearch(query);
+
+                // Обновляем UI в JavaFX потоке
+                Platform.runLater(() -> {
+                    searchResultsList.getItems().clear();
+                    searchResultsList.getItems().addAll(results);
+                    showSearch();
+
+                    logger.info("Найдено результатов: {}", results.size());
+                });
+            } catch (Exception e) {
+                logger.error("Ошибка поиска", e);
+                Platform.runLater(() -> showError("Ошибка поиска", e.getMessage()));
+            }
+        }).start();
+    }
+
+    /**
+     * Выполняет поиск по всем заметкам
+     */
+    private List<SearchResult> performSearch(String query) throws Exception {
+        List<SearchResult> results = new ArrayList<>();
+        List<Path> allNotes = fsManager.getAllNotes();
+
+        for (Path notePath : allNotes) {
+            try {
+                List<String> lines = Files.readAllLines(notePath);
+                String noteTitle = notePath.getFileName().toString().replaceAll("\\.md$", "");
+
+                // Ищем в названии
+                if (noteTitle.toLowerCase().contains(query)) {
+                    results.add(new SearchResult(
+                            notePath,
+                            noteTitle,
+                            "Название содержит поисковый запрос",
+                            0
+                    ));
+                }
+
+                // Ищем в содержимом
+                for (int i = 0; i < lines.size(); i++) {
+                    String line = lines.get(i);
+                    if (line.toLowerCase().contains(query)) {
+                        // Обрезаем длинные строки
+                        String preview = line.length() > 100
+                                ? line.substring(0, 100) + "..."
+                                : line;
+
+                        results.add(new SearchResult(
+                                notePath,
+                                noteTitle,
+                                preview.trim(),
+                                i + 1
+                        ));
+
+                        // Ограничиваем количество результатов на заметку
+                        if (results.stream().filter(r -> r.notePath.equals(notePath)).count() >= 5) {
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Ошибка чтения заметки: {}", notePath, e);
+            }
+        }
+
+        // Сортируем: сначала совпадения в названии, потом по названию заметки
+        results.sort((a, b) -> {
+            if (a.lineNumber == 0 && b.lineNumber != 0) return -1;
+            if (a.lineNumber != 0 && b.lineNumber == 0) return 1;
+            return a.noteTitle.compareToIgnoreCase(b.noteTitle);
+        });
+
+        return results;
+    }
+
+    /**
+     * Показать панель результатов поиска
+     */
+    private void showSearch() {
+        if (!isSearchVisible && notesTreeView != null && notesTreeView.getParent() instanceof VBox) {
+            VBox parent = (VBox) notesTreeView.getParent();
+            if (!parent.getChildren().contains(searchPanel)) {
+                parent.getChildren().add(searchPanel);
+            }
+            searchPanel.setVisible(true);
+            searchPanel.setManaged(true);
+            isSearchVisible = true;
+        }
+    }
+
+    /**
+     * Скрыть панель результатов поиска
+     */
+    private void hideSearch() {
+        if (isSearchVisible && searchPanel != null) {
+            searchPanel.setVisible(false);
+            searchPanel.setManaged(false);
+            isSearchVisible = false;
+            searchField.clear();
+            currentSearchQuery = "";
         }
     }
 
