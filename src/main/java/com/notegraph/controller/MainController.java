@@ -676,6 +676,61 @@ public class MainController {
     }
 
     @FXML
+    private void handleDailyNote() {
+        try {
+            hidePlaceholder();
+
+            // Формат даты: YYYY-MM-DD (как в Obsidian)
+            String dateTitle = java.time.LocalDate.now().toString();
+
+            // Проверяем, существует ли уже заметка на сегодня
+            Optional<Note> existingNote = noteService.getNoteByTitle(dateTitle);
+
+            if (existingNote.isPresent()) {
+                // Если существует - просто открываем
+                openNote(existingNote.get().getPath());
+                logger.info("Открыта существующая ежедневная заметка: {}", dateTitle);
+            } else {
+                // Создаем новую ежедневную заметку
+                String dailyContent = generateDailyNoteContent();
+                Note dailyNote = noteService.createNote(dateTitle, dailyContent);
+                openNoteInTab(dailyNote);
+                refreshTree();
+                updateNotesCount();
+                logger.info("Создана новая ежедневная заметка: {}", dateTitle);
+            }
+        } catch (Exception e) {
+            logger.error("Ошибка создания ежедневной заметки", e);
+            showError("Ошибка", e.getMessage());
+        }
+    }
+
+    /**
+     * Генерирует содержимое для ежедневной заметки
+     */
+    private String generateDailyNoteContent() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.format.DateTimeFormatter formatter =
+                java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy",
+                        new java.util.Locale("ru"));
+
+        String formattedDate = today.format(formatter);
+
+        return String.format("""
+                ## %s
+                
+                ### Задачи
+                - [ ] 
+                
+                ### Заметки
+                
+                
+                ### Ссылки
+                
+                """, formattedDate);
+    }
+
+    @FXML
     private void handleNewFolder() {
         TreeItem<Path> sel = notesTreeView.getSelectionModel().getSelectedItem();
         Path parent = (sel == null || sel.getValue() == null) ? fsManager.getVaultPath()
