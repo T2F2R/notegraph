@@ -1,5 +1,6 @@
 package com.notegraph.util;
 
+import com.notegraph.model.Note;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,24 +167,24 @@ public class FileSystemManager {
     /**
      * Создать новую заметку
      */
-    public Path createNote(String title, Path parentFolder) throws IOException {
-        // Очищаем название от недопустимых символов
-        String safeName = sanitizeFileName(title);
-        Path notePath = parentFolder.resolve(safeName + ".md");
+    public Note createNote(String title, String content, Path directory) {
+        try {
+            if (directory == null) {
+                directory = getVaultPath();
+            }
 
-        // Если файл уже существует, добавляем числовой суффикс
-        int counter = 1;
-        while (Files.exists(notePath)) {
-            notePath = parentFolder.resolve(safeName + " " + counter + ".md");
-            counter++;
+            Path filePath = directory.resolve(title + ".md");
+
+            Files.writeString(filePath, content != null ? content : "");
+
+            Note note = new Note(title, content);
+            note.setPath(filePath);
+
+            return note;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка создания заметки: " + e.getMessage(), e);
         }
-
-        // Создаем файл с frontmatter
-        String content = generateFrontmatter(title) + "\n\n";
-        Files.writeString(notePath, content);
-
-        logger.info("Создана заметка: {}", notePath);
-        return notePath;
     }
 
     /**

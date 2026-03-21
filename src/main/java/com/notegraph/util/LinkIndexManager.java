@@ -23,11 +23,9 @@ public class LinkIndexManager {
     
     private final Path indexFile;
     private final Gson gson;
-    
-    // Индекс: название заметки -> список заметок, которые на нее ссылаются
+
     private Map<String, Set<String>> backlinksIndex;
-    
-    // Индекс: название заметки -> список заметок, на которые она ссылается
+
     private Map<String, Set<String>> outgoingLinksIndex;
     
     private LinkIndexManager() {
@@ -113,8 +111,7 @@ public class LinkIndexManager {
      */
     public void updateNoteLinks(Note note) {
         String noteTitle = note.getTitle();
-        
-        // Удаляем старые исходящие ссылки из backlinks других заметок
+
         Set<String> oldOutgoingLinks = outgoingLinksIndex.getOrDefault(noteTitle, new HashSet<>());
         for (String targetTitle : oldOutgoingLinks) {
             Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
@@ -125,12 +122,10 @@ public class LinkIndexManager {
                 backlinksIndex.put(targetTitle, backlinks);
             }
         }
-        
-        // Добавляем новые исходящие ссылки
+
         Set<String> newOutgoingLinks = new HashSet<>(note.getOutgoingLinks());
         outgoingLinksIndex.put(noteTitle, newOutgoingLinks);
-        
-        // Обновляем backlinks для целевых заметок
+
         for (String targetTitle : newOutgoingLinks) {
             Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
             backlinks.add(noteTitle);
@@ -145,7 +140,6 @@ public class LinkIndexManager {
      * Удалить заметку из индекса
      */
     public void removeNote(String noteTitle) {
-        // Удаляем из backlinks других заметок
         Set<String> outgoingLinks = outgoingLinksIndex.getOrDefault(noteTitle, new HashSet<>());
         for (String targetTitle : outgoingLinks) {
             Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
@@ -156,11 +150,9 @@ public class LinkIndexManager {
                 backlinksIndex.put(targetTitle, backlinks);
             }
         }
-        
-        // Удаляем исходящие ссылки заметки
+
         outgoingLinksIndex.remove(noteTitle);
-        
-        // Удаляем backlinks заметки
+
         backlinksIndex.remove(noteTitle);
         
         saveIndex();
@@ -195,8 +187,7 @@ public class LinkIndexManager {
             Set<String> outgoingLinks = new HashSet<>(note.getOutgoingLinks());
             
             outgoingLinksIndex.put(noteTitle, outgoingLinks);
-            
-            // Обновляем backlinks
+
             for (String targetTitle : outgoingLinks) {
                 Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
                 backlinks.add(noteTitle);
@@ -237,5 +228,13 @@ public class LinkIndexManager {
      */
     public void reload() {
         loadIndex();
+    }
+
+    public Map<String, Set<String>> getGraph() {
+        Map<String, Set<String>> copy = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : outgoingLinksIndex.entrySet()) {
+            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
+        }
+        return copy;
     }
 }

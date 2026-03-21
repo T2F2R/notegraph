@@ -239,4 +239,19 @@ public class NoteServiceImpl implements NoteService {
             throw new IllegalArgumentException("Заголовок содержит недопустимые символы: \\ / : * ? \" < > |");
         }
     }
+
+    public Note createNoteInDirectory(String title, String content, Path directory) {
+        validateTitle(title);
+
+        if (noteRepository.findByTitle(title).isPresent()) {
+            throw new IllegalArgumentException("Заметка уже существует: " + title);
+        }
+
+        Note note = fsManager.createNote(title, content, directory);
+
+        note.extractOutgoingLinks();
+        linkIndexManager.updateNoteLinks(note);
+
+        return note;
+    }
 }

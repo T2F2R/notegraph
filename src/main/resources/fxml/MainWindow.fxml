@@ -28,6 +28,10 @@
                 <Menu text="Поиск">
                     <MenuItem text="Найти" onAction="#handleSearch" accelerator="Ctrl+F"/>
                 </Menu>
+                <Menu text="Граф">
+                    <MenuItem text="Открыть граф заметок"
+                              onAction="#handleOpenGraph"/>
+                </Menu>
             </MenuBar>
             <ToolBar>
                 <Button text="Новая заметка" onAction="#handleNewNote"/>

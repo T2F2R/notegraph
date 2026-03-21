@@ -1,18 +1,24 @@
 package com.notegraph.controller;
 
+import com.notegraph.graph.*;
 import com.notegraph.model.Note;
 import com.notegraph.service.impl.NoteServiceImpl;
 import com.notegraph.util.FileSystemManager;
 import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
 import com.notegraph.util.MetadataManager;
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.web.WebView;
+import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Главный контроллер приложения NoteGraph (файловая система).
+ * Главный контроллер приложения NoteGraph.
  */
 public class MainController {
 
@@ -51,12 +57,11 @@ public class MainController {
     private String currentSearchQuery = "";
     private Path cutPath = null;
 
-    // Поиск
     private ListView<SearchResult> searchResultsList;
     private VBox searchPanel;
     private boolean isSearchVisible = false;
 
-    // Inner class для результатов поиска
+
     private static class SearchResult {
         Path notePath;
         String noteTitle;
@@ -95,8 +100,22 @@ public class MainController {
 
     public class LinkClickHandler {
         public void openNote(String noteTitle) {
-            logger.debug("LinkClickHandler.openNote: {}", noteTitle);
-            Platform.runLater(() -> openOrCreateNote(noteTitle));
+            Platform.runLater(() -> {
+                Optional<Note> noteOpt = noteService.getNoteByTitle(noteTitle);
+
+                if (noteOpt.isPresent()) {
+                    openNoteInTab(noteOpt.get()); // 🔥 ВСЕГДА новая вкладка
+                } else {
+                    try {
+                        Note newNote = noteService.createNote(noteTitle, "");
+                        openNoteInTab(newNote);
+                        refreshTree();
+                        updateNotesCount();
+                    } catch (Exception e) {
+                        showError("Ошибка", e.getMessage());
+                    }
+                }
+            });
         }
     }
 
@@ -111,6 +130,71 @@ public class MainController {
         createPlusTab();
         refreshTree();
         updateNotesCount();
+    }
+
+    public void openGraphTab() {
+
+        // создаём canvas
+        Canvas canvas = new Canvas(1200, 800);
+
+        GraphCamera camera = new GraphCamera();
+
+        GraphData graph = GraphLayoutBuilder.build(
+                linkIndexManager.getGraph()
+        );
+
+        GraphRendererCanvas renderer =
+                new GraphRendererCanvas(canvas, camera);
+
+        new GraphInteractionController(
+                canvas,
+                camera,
+                graph.nodes,
+                noteTitle -> {
+                    Optional<Note> note = noteService.getNoteByTitle(noteTitle);
+                    note.ifPresent(this::openNoteInTab);
+                }
+        );
+
+        // animation loop
+        new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                GraphPhysics.step(graph.nodes, graph.edges);
+                renderer.render(graph.nodes, graph.edges);
+            }
+        }.start();
+
+        // создаём вкладку
+        Tab tab = new Tab("Graph");
+
+        // контейнер (важно!)
+        StackPane container = new StackPane(canvas);
+        tab.setContent(container);
+
+        // 🔥 ВАЖНО: используем notesTabPane
+        notesTabPane.getTabs().add(notesTabPane.getTabs().size() - 1, tab);
+        notesTabPane.getSelectionModel().select(tab);
+    }
+
+    private void openNoteFromGraph(String noteTitle) {
+
+        Optional<Note> noteOpt = noteService.getNoteByTitle(noteTitle);
+
+        if(noteOpt.isPresent()){
+            openNoteInTab(noteOpt.get());
+        } else {
+            logger.warn("Note not found from graph: {}", noteTitle);
+        }
+    }
+
+    @FXML
+    private void handleOpenGraph() {
+        try {
+            openGraphTab();
+        } catch (Exception e) {
+            logger.error("Ошибка открытия графа", e);
+        }
     }
 
     private void setupTreeView() {
@@ -167,10 +251,8 @@ public class MainController {
             }
         });
 
-        // Контекстное меню
         notesTreeView.setContextMenu(createTreeContextMenu());
 
-        // Горячие клавиши
         notesTreeView.setOnKeyPressed(event -> {
             if (event.isControlDown()) {
                 if (event.getCode() == javafx.scene.input.KeyCode.X) {
@@ -193,7 +275,6 @@ public class MainController {
      * Настройка панели поиска
      */
     private void setupSearch() {
-        // Создаем панель результатов поиска
         searchPanel = new VBox(5);
         searchPanel.setPadding(new Insets(10));
         searchPanel.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0;");
@@ -207,7 +288,6 @@ public class MainController {
         searchResultsList.setPrefHeight(200);
         VBox.setVgrow(searchResultsList, Priority.ALWAYS);
 
-        // Обработчик клика по результату
         searchResultsList.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
                 SearchResult result = searchResultsList.getSelectionModel().getSelectedItem();
@@ -225,7 +305,6 @@ public class MainController {
 
         searchPanel.getChildren().addAll(searchHeader, searchResultsList);
 
-        // Обработчик Enter в поле поиска
         if (searchField != null) {
             searchField.setOnAction(e -> handleSearch());
         }
@@ -346,79 +425,274 @@ public class MainController {
         }
     }
 
+    /**
+     * Открыть заметку в текущей вкладке
+     */
     private void openNoteInCurrentTab(Note note) {
-        // Проверяем, не открыта ли уже эта заметка в какой-то вкладке
-        if (openTabs.containsKey(note.getPath())) {
-            Tab existingTab = openTabs.get(note.getPath());
-            notesTabPane.getSelectionModel().select(existingTab);
-            logger.debug("Заметка уже открыта, переключаемся на вкладку: {}", note.getTitle());
+        logger.info("🔹 openNoteInCurrentTab: начинаем для '{}'", note.getTitle());
+
+        if (notesTabPane == null) {
+            logger.error("❌ notesTabPane == null!");
             return;
         }
+        logger.debug("   ✅ notesTabPane существует");
 
         Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
+        logger.debug("   Текущая вкладка: {}", currentTab != null ? currentTab.getText() : "null");
 
-        // Если нет текущей вкладки или это вкладка "+", открываем в новой вкладке
-        if (currentTab == null || "PLUS_TAB".equals(currentTab.getUserData())) {
+        // КРИТИЧЕСКАЯ ПРОВЕРКА: текущая вкладка должна быть заметкой!
+        boolean isNoteTab = currentTab != null
+                && currentTab.getUserData() instanceof NoteTabContent;
+
+        boolean isPlusTab = currentTab != null
+                && "PLUS_TAB".equals(currentTab.getUserData());
+
+        logger.debug("   Тип вкладки: isNote={}, isPlus={}", isNoteTab, isPlusTab);
+
+        // Если текущая вкладка НЕ заметка (например, Граф) - создаем новую вкладку
+        if (currentTab == null || isPlusTab || !isNoteTab) {
+            logger.info("   → Текущая вкладка НЕ является заметкой, создаем новую вкладку");
             openNoteInTab(note);
             return;
         }
 
-        // Сохраняем старую заметку и удаляем её из openTabs
+        // ПРОВЕРЯЕМ ЧТО ЗАМЕТКА ДЕЙСТВИТЕЛЬНО СУЩЕСТВУЕТ В TABPANE
+        if (openTabs.containsKey(note.getPath())) {
+            logger.info("   → Заметка найдена в openTabs");
+            Tab existingTab = openTabs.get(note.getPath());
+
+            // КРИТИЧЕСКАЯ ПРОВЕРКА: вкладка должна быть в TabPane
+            if (!notesTabPane.getTabs().contains(existingTab)) {
+                logger.error("   ❌ РАССИНХРОНИЗАЦИЯ: вкладка в openTabs, но НЕ в TabPane!");
+                logger.info("   → Удаляем из openTabs и создаем заново");
+                openTabs.remove(note.getPath());
+                // НЕ возвращаемся, продолжаем создание новой вкладки
+            } else {
+                logger.debug("   ✅ Вкладка существует в TabPane");
+
+                // Переключаемся на существующую вкладку
+                Platform.runLater(() -> {
+                    int index = notesTabPane.getTabs().indexOf(existingTab);
+                    logger.debug("   Индекс вкладки: {}", index);
+
+                    if (index >= 0) {
+                        notesTabPane.getSelectionModel().select(index);
+                        logger.info("   ✅ Вкладка выбрана по индексу {}", index);
+                    } else {
+                        logger.error("   ❌ Индекс -1, вкладка исчезла!");
+                    }
+                });
+
+                return;
+            }
+        }
+
+        logger.debug("   Заметка не открыта, открываем в текущей вкладке");
+
+        // Сохраняем старую заметку (только если это NoteTabContent)
         if (currentTab.getUserData() instanceof NoteTabContent) {
             NoteTabContent oldContent = (NoteTabContent) currentTab.getUserData();
-            saveNoteContent(oldContent);
+            logger.debug("   Сохраняем старую заметку: '{}'", oldContent.note.getTitle());
+
+            if (oldContent.updatedLabel != null && oldContent.linksCountLabel != null) {
+                saveNoteContent(oldContent);
+            } else {
+                try {
+                    oldContent.note.setBodyContent(oldContent.contentTextArea.getText());
+                    oldContent.note.extractOutgoingLinks();
+                    noteService.updateNote(oldContent.note);
+                    logger.debug("   Старая заметка сохранена в файл");
+                } catch (Exception e) {
+                    logger.error("   ❌ Ошибка сохранения при переключении", e);
+                }
+            }
+
             openTabs.remove(oldContent.note.getPath());
-            logger.debug("Закрываем старую заметку из вкладки: {}", oldContent.note.getTitle());
+            logger.debug("   Старая заметка удалена из openTabs");
         }
 
-        // Создаем новое содержимое для текущей вкладки
+        // Создаем новый контент
+        logger.debug("   Создаем NoteTabContent для '{}'", note.getTitle());
         NoteTabContent newContent = createTabContent(note);
+        logger.debug("   ✅ NoteTabContent создан");
+
+        logger.debug("   Устанавливаем текст вкладки: '{}'", note.getTitle());
         currentTab.setText(note.getTitle());
+
+        logger.debug("   Устанавливаем content в вкладку");
         currentTab.setContent(newContent.container);
+
+        logger.debug("   Устанавливаем userData");
         currentTab.setUserData(newContent);
 
-        // Обновляем обработчик закрытия вкладки
-        currentTab.setOnClosed(e -> {
-            saveNoteContent(newContent);
-            openTabs.remove(note.getPath());
-            logger.debug("Вкладка закрыта, удаляем из openTabs: {}", note.getTitle());
-        });
-
+        logger.debug("   Добавляем в openTabs: {}", note.getPath());
         openTabs.put(note.getPath(), currentTab);
-        logger.debug("Заметка открыта в текущей вкладке: {}", note.getTitle());
+
+        String relativePath = fsManager.getVaultPath().relativize(note.getPath()).toString();
+        metadataManager.addRecentNote(relativePath);
+        logger.debug("   Добавлено в recent notes");
+
+        logger.info("   ✅ Заметка '{}' открыта в текущей вкладке успешно", note.getTitle());
+
+        // Проверяем контент
+        if (currentTab.getContent() == null) {
+            logger.error("   ❌ ПРОБЛЕМА: currentTab.getContent() == null после установки!");
+        } else {
+            logger.debug("   ✅ currentTab.getContent() установлен корректно");
+            if (!currentTab.getContent().isVisible()) {
+                logger.warn("   ⚠️ Content не видим, делаем видимым");
+                currentTab.getContent().setVisible(true);
+            }
+        }
     }
 
+    /**
+     * Открыть заметку в НОВОЙ вкладке
+     */
     private void openNoteInTab(Note note) {
-        // Проверяем, не открыта ли уже
+        logger.info("🔸 openNoteInTab: создаем новую вкладку для '{}'", note.getTitle());
+
+        // ПРОВЕРЯЕМ ЧТО ЗАМЕТКА ДЕЙСТВИТЕЛЬНО НЕ ОТКРЫТА
         if (openTabs.containsKey(note.getPath())) {
             Tab existingTab = openTabs.get(note.getPath());
-            notesTabPane.getSelectionModel().select(existingTab);
-            logger.debug("Заметка уже открыта в вкладке, переключаемся: {}", note.getTitle());
-            return;
+
+            // Проверяем что вкладка существует в TabPane
+            if (notesTabPane.getTabs().contains(existingTab)) {
+                logger.info("   → Заметка уже открыта, переключаемся");
+                int index = notesTabPane.getTabs().indexOf(existingTab);
+                notesTabPane.getSelectionModel().select(index);
+                logger.info("   ✅ Переключились на существующую вкладку");
+                return;
+            } else {
+                logger.warn("   ⚠️ РАССИНХРОНИЗАЦИЯ: вкладка в openTabs но не в TabPane, очищаем");
+                openTabs.remove(note.getPath());
+            }
         }
 
+        // Создаем новую вкладку
+        logger.debug("   Создаем новый Tab");
         Tab tab = new Tab(note.getTitle());
+        logger.debug("   ✅ Tab создан с текстом: '{}'", tab.getText());
+
+        // Создаем контент
+        logger.debug("   Создаем NoteTabContent");
         NoteTabContent content = createTabContent(note);
+        logger.debug("   ✅ NoteTabContent создан");
+
+        // Устанавливаем контент
+        logger.debug("   Устанавливаем content.container в tab");
         tab.setContent(content.container);
+
+        logger.debug("   Устанавливаем userData");
         tab.setUserData(content);
+
+        // ВАЖНО: обработчик закрытия с правильной очисткой
+        final Path notePath = note.getPath();
         tab.setOnClosed(e -> {
-            saveNoteContent(content);
-            openTabs.remove(note.getPath());
-            logger.debug("Вкладка закрыта, удаляем из openTabs: {}", note.getTitle());
+            logger.debug("   Вкладка '{}' закрывается", note.getTitle());
+
+            // Сохраняем контент
+            if (tab.getUserData() instanceof NoteTabContent) {
+                NoteTabContent tabContent = (NoteTabContent) tab.getUserData();
+
+                // Безопасное сохранение
+                try {
+                    if (tabContent.note != null && tabContent.contentTextArea != null) {
+                        tabContent.note.setBodyContent(tabContent.contentTextArea.getText());
+                        tabContent.note.extractOutgoingLinks();
+                        noteService.updateNote(tabContent.note);
+                        logger.debug("   Заметка сохранена при закрытии");
+                    }
+                } catch (Exception ex) {
+                    logger.error("   Ошибка сохранения при закрытии", ex);
+                }
+            }
+
+            // КРИТИЧЕСКИ ВАЖНО: удаляем из openTabs
+            openTabs.remove(notePath);
+            logger.debug("   Вкладка '{}' удалена из openTabs, осталось: {}",
+                    note.getTitle(), openTabs.size());
         });
 
+        // Добавляем в openTabs
+        logger.debug("   Добавляем в openTabs");
         openTabs.put(note.getPath(), tab);
-        notesTabPane.getTabs().add(notesTabPane.getTabs().size() - 1, tab);
+
+        // Добавляем вкладку в TabPane
+        int tabCount = notesTabPane.getTabs().size();
+        logger.debug("   Текущее количество вкладок: {}", tabCount);
+        logger.debug("   Добавляем вкладку в позицию: {}", tabCount - 1);
+
+        notesTabPane.getTabs().add(tabCount - 1, tab); // Перед вкладкой "+"
+        logger.debug("   ✅ Вкладка добавлена в TabPane");
+
+        // Выбираем вкладку
+        logger.debug("   Выбираем новую вкладку");
         notesTabPane.getSelectionModel().select(tab);
-        logger.debug("Создана новая вкладка для заметки: {}", note.getTitle());
+        logger.debug("   ✅ Вкладка выбрана");
+
+        // Проверяем что вкладка действительно выбрана
+        Tab selectedTab = notesTabPane.getSelectionModel().getSelectedItem();
+        if (selectedTab == tab) {
+            logger.info("   ✅ Новая вкладка '{}' успешно создана и выбрана", note.getTitle());
+        } else {
+            logger.error("   ❌ ПРОБЛЕМА: Вкладка создана но не выбрана! Выбрана: '{}'",
+                    selectedTab != null ? selectedTab.getText() : "null");
+        }
+
+        // Проверяем что вкладка в списке
+        if (!notesTabPane.getTabs().contains(tab)) {
+            logger.error("   ❌ КРИТИЧЕСКАЯ ОШИБКА: вкладка не в списке после добавления!");
+        } else {
+            logger.debug("   ✅ Вкладка в списке TabPane на позиции {}",
+                    notesTabPane.getTabs().indexOf(tab));
+        }
+    }
+
+    /**
+     * Очистка рассинхронизации между openTabs и TabPane
+     */
+    private void cleanupOpenTabs() {
+        logger.debug(" Очистка openTabs от устаревших записей");
+
+        // Находим все вкладки которые есть в openTabs но нет в TabPane
+        Set<Path> toRemove = new HashSet<>();
+
+        for (Map.Entry<Path, Tab> entry : openTabs.entrySet()) {
+            Path path = entry.getKey();
+            Tab tab = entry.getValue();
+
+            if (!notesTabPane.getTabs().contains(tab)) {
+                logger.warn("   ⚠️ Найдена рассинхронизация: {} не в TabPane", path.getFileName());
+                toRemove.add(path);
+            }
+        }
+
+        // Удаляем устаревшие записи
+        for (Path path : toRemove) {
+            openTabs.remove(path);
+            logger.debug("   Удалено из openTabs: {}", path.getFileName());
+        }
+
+        if (toRemove.isEmpty()) {
+            logger.debug("   ✅ Рассинхронизаций не найдено");
+        } else {
+            logger.info("   ✅ Очищено {} устаревших записей", toRemove.size());
+        }
+
+        logger.debug("   Текущий размер openTabs: {}", openTabs.size());
+        logger.debug("   Текущее количество вкладок: {}", notesTabPane.getTabs().size() - 1); // -1 для вкладки "+"
     }
 
     private NoteTabContent createTabContent(Note note) {
+
         NoteTabContent content = new NoteTabContent();
         content.note = note;
+
         content.container = new VBox(10);
         content.container.setPadding(new Insets(10));
 
+        // ===== TOOLBAR =====
         HBox toolbar = new HBox(10);
         toolbar.setPadding(new Insets(5));
         toolbar.setStyle("-fx-background-color: #f0f0f0;");
@@ -427,90 +701,71 @@ public class MainController {
         content.previewModeButton = new ToggleButton("👁️ Просмотр");
         content.editModeButton.setSelected(true);
 
-        ToggleGroup modeGroup = new ToggleGroup();
-        content.editModeButton.setToggleGroup(modeGroup);
-        content.previewModeButton.setToggleGroup(modeGroup);
+        ToggleGroup group = new ToggleGroup();
+        content.editModeButton.setToggleGroup(group);
+        content.previewModeButton.setToggleGroup(group);
 
         content.editModeButton.setOnAction(e -> switchToEditMode(content));
         content.previewModeButton.setOnAction(e -> switchToPreviewMode(content));
 
         toolbar.getChildren().addAll(content.editModeButton, content.previewModeButton);
 
+        // ===== EDIT =====
         content.editArea = new VBox(5);
+
         content.titleField = new TextField(note.getTitle());
-        content.titleField.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-padding: 10;");
-        content.titleField.setPromptText("Название заметки...");
-
-        // Сохраняем оригинальное название для сравнения
-        final String[] originalTitle = {note.getTitle()};
-
-        content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.trim().isEmpty()) {
-                // Обновляем только UI, но НЕ модель заметки
-                Tab tab = openTabs.get(note.getPath());
-                if (tab != null) {
-                    tab.setText(newVal);
-                }
-            }
-        });
-
-        content.titleField.focusedProperty().addListener((obs, was, is) -> {
-            if (!is && was) {
-                String newTitle = content.titleField.getText().trim();
-                if (!newTitle.isEmpty() && !newTitle.equals(originalTitle[0])) {
-                    // Переименовываем файл
-                    renameNoteFile(content, newTitle);
-                    // Обновляем оригинальное название после успешного переименования
-                    originalTitle[0] = newTitle;
-                }
-            }
-        });
+        content.titleField.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
         content.contentTextArea = new TextArea(note.getBodyContent());
         content.contentTextArea.setWrapText(true);
-        content.contentTextArea.setPromptText("Начните писать...");
+
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
-        VBox.setVgrow(content.editArea, Priority.ALWAYS);
 
-        content.previewScrollPane = new ScrollPane();
-        content.previewPane = new VBox(10);
-        content.previewPane.setPadding(new Insets(10));
+        // ===== PREVIEW =====
         content.webView = new WebView();
-        content.webView.setPrefHeight(600);
-        content.webView.getEngine().setJavaScriptEnabled(true);
+        content.webView.getEngine().setJavaScriptEnabled(true); // ✅ ВКЛЮЧАЕМ JavaScript!
 
+        content.previewScrollPane = new ScrollPane(content.webView);
+        content.previewScrollPane.setFitToWidth(true);
+        content.previewScrollPane.setVisible(false);
+        content.previewScrollPane.setManaged(false);
+
+        // 🔥 УСТАНОВКА JAVASCRIPT BRIDGE
         content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
                     JSObject window = (JSObject) content.webView.getEngine().executeScript("window");
-                    window.setMember("app", new LinkClickHandler());
-                    logger.debug("JavaScript bridge установлен для заметки: {}", note.getTitle());
-                } catch (Exception ex) {
-                    logger.error("Ошибка установки JS bridge", ex);
+
+                    // Создаем Java объект для вызова из JavaScript
+                    JavaBridge bridge = new JavaBridge();
+
+                    // Устанавливаем bridge в window.javaApp
+                    window.setMember("javaApp", bridge);
+
+                    logger.info("✅ JavaScript bridge установлен для заметки: {}", note.getTitle());
+                } catch (Exception e) {
+                    logger.error("❌ Ошибка установки JavaScript bridge", e);
                 }
             }
         });
 
-        content.previewPane.getChildren().add(content.webView);
-        content.previewScrollPane.setContent(content.previewPane);
-        content.previewScrollPane.setFitToWidth(true);
-        VBox.setVgrow(content.previewScrollPane, Priority.ALWAYS);
-        content.previewScrollPane.setVisible(false);
-        content.previewScrollPane.setManaged(false);
+        // ===== META =====
+        HBox meta = new HBox(20);
 
-        HBox metaPanel = new HBox(20);
-        metaPanel.setPadding(new Insets(5));
-        metaPanel.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0;");
+        Label created = new Label("Создано: " + note.getCreated());
+        Label updated = new Label("Изменено: " + note.getModified());
 
-        content.createdLabel = new Label("Создано: " + (note.getCreated() != null ? note.getCreated().format(DATE_FORMATTER) : "—"));
-        content.updatedLabel = new Label("Изменено: " + (note.getModified() != null ? note.getModified().format(DATE_FORMATTER) : "—"));
-        content.linksCountLabel = new Label("Связей: " + note.getOutgoingLinks().size());
+        meta.getChildren().addAll(created, updated);
 
-        metaPanel.getChildren().addAll(content.createdLabel, content.updatedLabel, content.linksCountLabel);
+        content.container.getChildren().addAll(
+                toolbar,
+                content.editArea,
+                content.previewScrollPane,
+                meta
+        );
 
-        content.container.getChildren().addAll(toolbar, content.editArea, content.previewScrollPane, metaPanel);
         return content;
     }
 
@@ -522,18 +777,26 @@ public class MainController {
         c.previewScrollPane.setManaged(false);
     }
 
-    private void switchToPreviewMode(NoteTabContent c) {
-        c.isEditMode = false;
-        c.editArea.setVisible(false);
-        c.editArea.setManaged(false);
-        c.previewScrollPane.setVisible(true);
-        c.previewScrollPane.setManaged(true);
-        updatePreview(c);
+    private void switchToPreviewMode(NoteTabContent content) {
+        content.isEditMode = false;
+        content.editArea.setVisible(false);
+        content.editArea.setManaged(false);
+        content.previewScrollPane.setVisible(true);
+        content.previewScrollPane.setManaged(true);
+
+        // Обновляем preview
+        updatePreview(content);
     }
 
-    private void updatePreview(NoteTabContent c) {
-        String md = "# " + c.titleField.getText() + "\n\n" + c.contentTextArea.getText();
-        c.webView.getEngine().loadContent(markdownRenderer.renderToHtml(md));
+    private void updatePreview(NoteTabContent content) {
+        String titleMarkdown = "# " + content.titleField.getText() + "\n\n";
+        String bodyMarkdown = content.contentTextArea.getText();
+        String fullMarkdown = titleMarkdown + bodyMarkdown;
+
+        String html = markdownRenderer.renderToHtml(fullMarkdown);
+        content.webView.getEngine().loadContent(html);
+
+        logger.debug("Preview обновлен для заметки: {}", content.note.getTitle());
     }
 
     private void renameNoteFile(NoteTabContent c, String newTitle) {
@@ -551,16 +814,13 @@ public class MainController {
             Path oldPath = c.note.getPath();
             Note renamed = noteService.renameNote(c.note, newTitle);
 
-            // Обновляем ссылку на заметку в content
             c.note = renamed;
 
-            // Обновляем openTabs
             Tab tab = openTabs.remove(oldPath);
             if (tab != null) {
                 openTabs.put(renamed.getPath(), tab);
                 tab.setText(newTitle);
 
-                // Обновляем обработчик закрытия для нового пути
                 tab.setOnClosed(e -> {
                     saveNoteContent(c);
                     openTabs.remove(renamed.getPath());
@@ -578,35 +838,144 @@ public class MainController {
         }
     }
 
-    private void saveNoteContent(NoteTabContent c) {
-        if (c == null || c.note == null) return;
+    private void saveNoteContent(NoteTabContent content) {
+        if (content == null || content.note == null) {
+            return;
+        }
+
         try {
-            c.note.setBodyContent(c.contentTextArea.getText());
-            c.note.extractOutgoingLinks();
-            noteService.updateNote(c.note);
-            c.updatedLabel.setText("Изменено: " + c.note.getModified().format(DATE_FORMATTER));
-            c.linksCountLabel.setText("Связей: " + c.note.getOutgoingLinks().size());
+            // Обновляем контент заметки
+            content.note.setBodyContent(content.contentTextArea.getText());
+            content.note.extractOutgoingLinks();
+
+            // Сохраняем в файл
+            noteService.updateNote(content.note);
+
+            // Обновляем UI только если компоненты созданы
+            if (content.updatedLabel != null) {
+                content.updatedLabel.setText("Изменено: " + content.note.getModified());
+            }
+
+            if (content.linksCountLabel != null) {
+                content.linksCountLabel.setText("Связей: " + content.note.getOutgoingLinks().size());
+            }
+
             showAutoSaveIndicator();
+            logger.debug("Заметка сохранена: {}", content.note.getTitle());
+
         } catch (Exception e) {
-            logger.error("Ошибка сохранения", e);
-            showError("Ошибка", e.getMessage());
+            logger.error("Ошибка при сохранении заметки", e);
+            showError("Ошибка", "Не удалось сохранить заметку: " + e.getMessage());
         }
     }
 
     private void openOrCreateNote(String title) {
-        Optional<Note> ex = noteService.getNoteByTitle(title);
-        if (ex.isPresent()) {
-            openNoteInCurrentTab(ex.get());
-        } else {
-            try {
-                Note n = noteService.createNote(title, "");
-                openNoteInCurrentTab(n);
+        logger.info("═══════════════════════════════════════════════════════");
+        logger.info("🔍 openOrCreateNote вызван для: '{}'", title);
+        logger.info("═══════════════════════════════════════════════════════");
+
+        // ДИАГНОСТИКА СОСТОЯНИЯ TABPANE
+        logger.info("📊 ДИАГНОСТИКА TabPane:");
+        logger.info("   Всего вкладок: {}", notesTabPane.getTabs().size());
+
+        Tab selectedTab = notesTabPane.getSelectionModel().getSelectedItem();
+        logger.info("   Выбрана вкладка: {}", selectedTab != null ? selectedTab.getText() : "null");
+
+        if (selectedTab != null) {
+            Object userData = selectedTab.getUserData();
+            logger.info("   userData тип: {}", userData != null ? userData.getClass().getSimpleName() : "null");
+            logger.info("   userData == PLUS_TAB: {}", "PLUS_TAB".equals(userData));
+            logger.info("   userData instanceof NoteTabContent: {}", userData instanceof NoteTabContent);
+        }
+
+        // Логируем все открытые вкладки
+        logger.info("   Список всех вкладок:");
+        for (int i = 0; i < notesTabPane.getTabs().size(); i++) {
+            Tab tab = notesTabPane.getTabs().get(i);
+            Object ud = tab.getUserData();
+            String type = "unknown";
+            if ("PLUS_TAB".equals(ud)) type = "PLUS";
+            else if (ud instanceof NoteTabContent) type = "NOTE";
+            else if (ud != null) type = ud.getClass().getSimpleName();
+
+            boolean isSelected = tab == selectedTab;
+            logger.info("      [{}] {} - тип: {} - выбрана: {}", i, tab.getText(), type, isSelected);
+        }
+
+        // ДИАГНОСТИКА openTabs
+        logger.info("📋 openTabs содержит {} записей:", openTabs.size());
+        for (Map.Entry<Path, Tab> entry : openTabs.entrySet()) {
+            Tab tab = entry.getValue();
+            boolean inTabPane = notesTabPane.getTabs().contains(tab);
+            logger.info("   {} → в TabPane: {}", entry.getKey().getFileName(), inTabPane);
+        }
+
+        // Очистка
+        cleanupOpenTabs();
+
+        try {
+            Optional<Note> existing = noteService.getNoteByTitle(title);
+
+            if (existing.isPresent()) {
+                logger.info("✅ Заметка '{}' найдена, открываем", title);
+                Note note = existing.get();
+                logger.debug("   Путь: {}", note.getPath());
+
+                // КРИТИЧЕСКИЙ МОМЕНТ: проверяем тип ВЫБРАННОЙ вкладки
+                Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
+
+                logger.info("🔎 Анализ текущей вкладки:");
+                logger.info("   Текущая: {}", currentTab != null ? currentTab.getText() : "null");
+
+                if (currentTab != null) {
+                    Object userData = currentTab.getUserData();
+                    boolean isNote = userData instanceof NoteTabContent;
+                    boolean isPlus = "PLUS_TAB".equals(userData);
+
+                    logger.info("   isNoteTab: {}", isNote);
+                    logger.info("   isPlusTab: {}", isPlus);
+
+                    if (isNote) {
+                        logger.info("   ✅ Текущая вкладка - ЗАМЕТКА, открываем в ней");
+                        openNoteInCurrentTab(note);
+                    } else if (isPlus) {
+                        logger.info("   ⊕ Текущая вкладка - PLUS, создаем новую вкладку");
+                        openNoteInTab(note);
+                    } else {
+                        logger.info("   🎨 Текущая вкладка - НЕ ЗАМЕТКА (граф?), создаем новую вкладку");
+                        openNoteInTab(note);
+                    }
+                } else {
+                    logger.info("   ℹ️ Нет текущей вкладки, создаем новую");
+                    openNoteInTab(note);
+                }
+
+                logger.info("✅ Заметка '{}' открыта успешно", title);
+            } else {
+                logger.info("🆕 Заметка '{}' не найдена, создаем новую", title);
+
+                Note newNote = noteService.createNote(title, "");
+                logger.info("✅ Заметка '{}' создана", title);
+
+                // Новые заметки всегда в новой вкладке
+                openNoteInTab(newNote);
+
                 refreshTree();
                 updateNotesCount();
-            } catch (Exception e) {
-                showError("Ошибка", e.getMessage());
+
+                logger.info("✅ Новая заметка '{}' открыта", title);
             }
+        } catch (Exception e) {
+            logger.error("❌ ОШИБКА: {}", e.getMessage(), e);
+            showError("Ошибка", e.getMessage());
         }
+
+        // ДИАГНОСТИКА ПОСЛЕ
+        logger.info("📊 СОСТОЯНИЕ ПОСЛЕ:");
+        Tab nowSelected = notesTabPane.getSelectionModel().getSelectedItem();
+        logger.info("   Теперь выбрана: {}", nowSelected != null ? nowSelected.getText() : "null");
+        logger.info("   openTabs размер: {}", openTabs.size());
+        logger.info("═══════════════════════════════════════════════════════");
     }
 
     private void setupSorting() {
@@ -721,25 +1090,32 @@ public class MainController {
 
     @FXML
     private void handleNewNote() {
+        TreeItem<Path> selected = notesTreeView.getSelectionModel().getSelectedItem();
+
+        Path targetDir;
+
+        if (selected == null || selected.getValue() == null) {
+            targetDir = fsManager.getVaultPath();
+        } else if (Files.isDirectory(selected.getValue())) {
+            targetDir = selected.getValue();
+        } else {
+            targetDir = selected.getValue().getParent();
+        }
+
         try {
-            hidePlaceholder();
-            String t = "Новая заметка";
+            String title = "Новая заметка";
             int i = 1;
-            while (noteService.getNoteByTitle(t).isPresent()) {
-                t = "Новая заметка " + i++;
+
+            while (noteService.getNoteByTitle(title).isPresent()) {
+                title = "Новая заметка " + i++;
             }
-            Note n = noteService.createNote(t, "");
-            openNoteInTab(n);
+
+            Note note = noteService.createNoteInDirectory(title, "", targetDir);
+
+            openNoteInTab(note);
             refreshTree();
             updateNotesCount();
-            Platform.runLater(() -> {
-                Tab tab = notesTabPane.getSelectionModel().getSelectedItem();
-                if (tab != null && tab.getUserData() instanceof NoteTabContent) {
-                    NoteTabContent c = (NoteTabContent) tab.getUserData();
-                    c.titleField.requestFocus();
-                    c.titleField.selectAll();
-                }
-            });
+
         } catch (Exception e) {
             showError("Ошибка", e.getMessage());
         }
@@ -750,18 +1126,14 @@ public class MainController {
         try {
             hidePlaceholder();
 
-            // Формат даты: YYYY-MM-DD (как в Obsidian)
             String dateTitle = java.time.LocalDate.now().toString();
 
-            // Проверяем, существует ли уже заметка на сегодня
             Optional<Note> existingNote = noteService.getNoteByTitle(dateTitle);
 
             if (existingNote.isPresent()) {
-                // Если существует - просто открываем
                 openNote(existingNote.get().getPath());
                 logger.info("Открыта существующая ежедневная заметка: {}", dateTitle);
             } else {
-                // Создаем новую ежедневную заметку
                 String dailyContent = generateDailyNoteContent();
                 Note dailyNote = noteService.createNote(dateTitle, dailyContent);
                 openNoteInTab(dailyNote);
@@ -802,16 +1174,16 @@ public class MainController {
 
     @FXML
     private void handleNewFolder() {
-        TreeItem<Path> sel = notesTreeView.getSelectionModel().getSelectedItem();
-        Path parent = (sel == null || sel.getValue() == null) ? fsManager.getVaultPath()
-                : Files.isDirectory(sel.getValue()) ? sel.getValue() : sel.getValue().getParent();
 
-        TextInputDialog d = new TextInputDialog();
-        d.setTitle("Новая папка");
-        d.setContentText("Введите название:");
-        d.showAndWait().ifPresent(name -> {
+        Path parentDir = getTargetDirectory(); // 🔥 вместо ручной логики
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Новая папка");
+        dialog.setContentText("Введите название:");
+
+        dialog.showAndWait().ifPresent(name -> {
             try {
-                fsManager.createFolder(name, parent);
+                fsManager.createFolder(name, parentDir);
                 refreshTree();
             } catch (Exception e) {
                 showError("Ошибка", e.getMessage());
@@ -1006,12 +1378,10 @@ public class MainController {
 
         logger.info("Поиск: '{}'", query);
 
-        // Выполняем поиск в отдельном потоке
         new Thread(() -> {
             try {
                 List<SearchResult> results = performSearch(query);
 
-                // Обновляем UI в JavaFX потоке
                 Platform.runLater(() -> {
                     searchResultsList.getItems().clear();
                     searchResultsList.getItems().addAll(results);
@@ -1038,7 +1408,6 @@ public class MainController {
                 List<String> lines = Files.readAllLines(notePath);
                 String noteTitle = notePath.getFileName().toString().replaceAll("\\.md$", "");
 
-                // Ищем в названии
                 if (noteTitle.toLowerCase().contains(query)) {
                     results.add(new SearchResult(
                             notePath,
@@ -1048,11 +1417,9 @@ public class MainController {
                     ));
                 }
 
-                // Ищем в содержимом
                 for (int i = 0; i < lines.size(); i++) {
                     String line = lines.get(i);
                     if (line.toLowerCase().contains(query)) {
-                        // Обрезаем длинные строки
                         String preview = line.length() > 100
                                 ? line.substring(0, 100) + "..."
                                 : line;
@@ -1064,7 +1431,6 @@ public class MainController {
                                 i + 1
                         ));
 
-                        // Ограничиваем количество результатов на заметку
                         if (results.stream().filter(r -> r.notePath.equals(notePath)).count() >= 5) {
                             break;
                         }
@@ -1075,7 +1441,6 @@ public class MainController {
             }
         }
 
-        // Сортируем: сначала совпадения в названии, потом по названию заметки
         results.sort((a, b) -> {
             if (a.lineNumber == 0 && b.lineNumber != 0) return -1;
             if (a.lineNumber != 0 && b.lineNumber == 0) return 1;
@@ -1113,18 +1478,60 @@ public class MainController {
         }
     }
 
+    private Path getTargetDirectory() {
+        TreeItem<Path> selected = notesTreeView.getSelectionModel().getSelectedItem();
+
+        if (selected == null || selected.getValue() == null) {
+            return fsManager.getVaultPath(); // root
+        }
+
+        Path selectedPath = selected.getValue();
+
+        if (Files.isDirectory(selectedPath)) {
+            return selectedPath; // папка выбрана
+        } else {
+            return selectedPath.getParent(); // выбрана заметка
+        }
+    }
+
     @FXML
     private void handleExit() {
         shutdown();
         Platform.exit();
     }
 
+    /**
+     * Завершение работы приложения
+     */
     public void shutdown() {
-        saveAllOpenNotes();
+        logger.info("Завершение работы контроллера");
+
+        // Сохраняем все открытые заметки
+        for (Tab tab : notesTabPane.getTabs()) {
+            if (tab.getUserData() instanceof NoteTabContent) {
+                NoteTabContent content = (NoteTabContent) tab.getUserData();
+
+                // Безопасное сохранение без обновления UI
+                try {
+                    if (content.note != null && content.contentTextArea != null) {
+                        content.note.setBodyContent(content.contentTextArea.getText());
+                        content.note.extractOutgoingLinks();
+                        noteService.updateNote(content.note);
+                        logger.debug("Сохранена заметка при закрытии: {}", content.note.getTitle());
+                    }
+                } catch (Exception e) {
+                    logger.error("Ошибка сохранения заметки при закрытии: {}", content.note.getTitle(), e);
+                }
+            }
+        }
+
+        // Останавливаем таймер автосохранения
         if (autoSaveTimer != null) {
             autoSaveTimer.cancel();
             autoSaveTimer = null;
         }
+
+        logger.info("Контроллер завершен");
     }
 
     private void showError(String title, String msg) {
@@ -1132,5 +1539,32 @@ public class MainController {
         a.setTitle(title);
         a.setContentText(msg);
         a.showAndWait();
+    }
+
+    /**
+     * Java объект, доступный из JavaScript
+     */
+    public class JavaBridge {
+        public void openNote(String noteTitle) {
+            logger.info("🔗 JavaBridge.openNote вызван: '{}'", noteTitle);
+
+            if (noteTitle == null || noteTitle.trim().isEmpty()) {
+                logger.error("❌ Пустое название!");
+                return;
+            }
+
+            final String title = noteTitle.trim();
+
+            Platform.runLater(() -> {
+                try {
+                    logger.info("📝 Открываем заметку '{}'", title);
+                    openOrCreateNote(title);
+                    logger.info("✅ Заметка '{}' открыта", title);
+                } catch (Exception e) {
+                    logger.error("❌ Ошибка открытия '{}': {}", title, e.getMessage(), e);
+                    showError("Ошибка", e.getMessage());
+                }
+            });
+        }
     }
 }

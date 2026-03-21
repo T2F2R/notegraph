@@ -33,8 +33,12 @@ public class FileSystemNoteRepository implements NoteRepository {
             // Если путь не установлен, создаем файл
             if (note.getPath() == null) {
                 Path parentFolder = fsManager.getVaultPath();
-                Path notePath = fsManager.createNote(note.getTitle(), parentFolder);
-                note.setPath(notePath);
+                Note created = fsManager.createNote(
+                        note.getTitle(),
+                        note.getBodyContent(),
+                        parentFolder
+                );
+                note.setPath(created.getPath());
             } else {
                 // Путь уже установлен, просто создаем файл если его нет
                 if (!Files.exists(note.getPath())) {
