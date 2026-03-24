@@ -1,5 +1,6 @@
 package com.notegraph.ui;
 
+import com.notegraph.util.MetadataManager;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 
@@ -7,10 +8,16 @@ public class ThemeManager {
 
     private static ThemeManager instance;
 
-    private final ObjectProperty<Theme> currentTheme = new SimpleObjectProperty<>(Theme.DARK);
+    private final ObjectProperty<Theme> currentTheme = new SimpleObjectProperty<>();
+    private final MetadataManager metadataManager = MetadataManager.getInstance();
 
     private ThemeManager() {
-        System.out.println("ThemeManager создан с темой: DARK");
+        // Загружаем сохраненную тему или используем светлую по умолчанию
+        String savedTheme = metadataManager.getPreference("theme", "LIGHT");
+        Theme theme = "DARK".equals(savedTheme) ? Theme.DARK : Theme.LIGHT;
+        currentTheme.set(theme);
+
+        System.out.println("ThemeManager создан с темой: " + savedTheme);
     }
 
     public static ThemeManager getInstance() {
@@ -27,6 +34,12 @@ public class ThemeManager {
     public void setTheme(Theme theme) {
         System.out.println("ThemeManager.setTheme вызван: " + (theme == Theme.DARK ? "DARK" : "LIGHT"));
         currentTheme.set(theme);
+
+        // Сохраняем тему в настройки
+        String themeValue = (theme == Theme.DARK) ? "DARK" : "LIGHT";
+        metadataManager.setPreference("theme", themeValue);
+
+        System.out.println("Тема сохранена в настройки: " + themeValue);
     }
 
     public ObjectProperty<Theme> themeProperty() {
