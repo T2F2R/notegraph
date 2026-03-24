@@ -3,6 +3,8 @@ package com.notegraph.controller;
 import com.notegraph.graph.*;
 import com.notegraph.model.Note;
 import com.notegraph.service.impl.NoteServiceImpl;
+import com.notegraph.ui.Theme;
+import com.notegraph.ui.ThemeManager;
 import com.notegraph.util.FileSystemManager;
 import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
@@ -61,6 +63,8 @@ public class MainController {
     private VBox searchPanel;
     private boolean isSearchVisible = false;
 
+    private final ThemeManager themeManager = ThemeManager.getInstance();
+    @FXML private BorderPane rootPane;
 
     private static class SearchResult {
         Path notePath;
@@ -130,21 +134,126 @@ public class MainController {
         createPlusTab();
         refreshTree();
         updateNotesCount();
+        setupTheme();
+    }
+
+    private void setupTheme() {
+        // Применяем начальную тему
+        applyTheme(themeManager.getCurrentTheme());
+
+        // Слушаем изменения темы
+        themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
+            applyTheme(newTheme);
+        });
+    }
+
+    private void applyTheme(Theme theme) {
+        if (rootPane == null) return;
+
+        String bgHex = toHex(theme.background);
+        String textHex = toHex(theme.text);
+        String borderHex = toHex(theme.nodeBorder);
+
+        // Применяем глобальные стили
+        String globalStyle = String.format("""
+        -fx-base: %s;
+        -fx-background: %s;
+        -fx-control-inner-background: %s;
+        -fx-control-inner-background-alt: derive(-fx-control-inner-background, -5%%);
+        -fx-text-fill: %s;
+        -fx-text-base-color: %s;
+        -fx-focus-color: %s;
+        -fx-accent: %s;
+        """,
+                bgHex,
+                bgHex,
+                bgHex,
+                textHex,
+                textHex,
+                toHex(theme.nodeColor),
+                toHex(theme.nodeColor)
+        );
+
+        rootPane.setStyle(globalStyle);
+
+        // ДОБАВЬТЕ: Стили для открытых вкладок с заметками
+        for (Tab tab : notesTabPane.getTabs()) {
+            if (tab.getUserData() instanceof NoteTabContent) {
+                NoteTabContent content = (NoteTabContent) tab.getUserData();
+                applyThemeToNoteContent(content, theme);
+            }
+        }
+    }
+
+    // ДОБАВЬТЕ: Новый метод для применения темы к контенту заметки
+    private void applyThemeToNoteContent(NoteTabContent content, Theme theme) {
+        String bgHex = toHex(theme.background);
+        String textHex = toHex(theme.text);
+
+        // Стили для кнопок переключения режима
+        String buttonStyle = String.format(
+                "-fx-background-color: %s; -fx-text-fill: %s; -fx-border-color: %s;",
+                bgHex, textHex, toHex(theme.nodeBorder)
+        );
+
+        if (content.editModeButton != null) {
+            content.editModeButton.setStyle(buttonStyle);
+        }
+
+        if (content.previewModeButton != null) {
+            content.previewModeButton.setStyle(buttonStyle);
+        }
+
+        // Стили для текстовых полей
+        String textFieldStyle = String.format(
+                "-fx-background-color: %s; -fx-text-fill: %s;",
+                bgHex, textHex
+        );
+
+        if (content.titleField != null) {
+            content.titleField.setStyle(textFieldStyle);
+        }
+
+        if (content.contentTextArea != null) {
+            content.contentTextArea.setStyle(textFieldStyle);
+        }
+
+        // Стили для контейнера
+        if (content.container != null) {
+            content.container.setStyle("-fx-background-color: " + bgHex + ";");
+        }
+    }
+
+    private String toHex(javafx.scene.paint.Color color) {
+        return String.format("#%02X%02X%02X",
+                (int) (color.getRed() * 255),
+                (int) (color.getGreen() * 255),
+                (int) (color.getBlue() * 255)
+        );
+    }
+
+    // 4. Обработчик для меню:
+    @FXML
+    private void handleToggleTheme() {
+        themeManager.toggleTheme();
     }
 
     public void openGraphTab() {
-
         // создаём canvas
         Canvas canvas = new Canvas(1200, 800);
-
         GraphCamera camera = new GraphCamera();
-
         GraphData graph = GraphLayoutBuilder.build(
                 linkIndexManager.getGraph()
         );
 
-        GraphRendererCanvas renderer =
-                new GraphRendererCanvas(canvas, camera);
+        // ИСПРАВЛЕНИЕ: создаем рендерер и применяем текущую тему
+        GraphRendererCanvas renderer = new GraphRendererCanvas(canvas, camera);
+        renderer.setTheme(themeManager.getCurrentTheme());
+
+        // ИСПРАВЛЕНИЕ: слушаем изменения темы
+        themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
+            renderer.setTheme(newTheme);
+        });
 
         new GraphInteractionController(
                 canvas,
@@ -167,25 +276,11 @@ public class MainController {
 
         // создаём вкладку
         Tab tab = new Tab("Graph");
-
-        // контейнер (важно!)
         StackPane container = new StackPane(canvas);
         tab.setContent(container);
 
-        // 🔥 ВАЖНО: используем notesTabPane
         notesTabPane.getTabs().add(notesTabPane.getTabs().size() - 1, tab);
         notesTabPane.getSelectionModel().select(tab);
-    }
-
-    private void openNoteFromGraph(String noteTitle) {
-
-        Optional<Note> noteOpt = noteService.getNoteByTitle(noteTitle);
-
-        if(noteOpt.isPresent()){
-            openNoteInTab(noteOpt.get());
-        } else {
-            logger.warn("Note not found from graph: {}", noteTitle);
-        }
     }
 
     @FXML
@@ -685,17 +780,14 @@ public class MainController {
     }
 
     private NoteTabContent createTabContent(Note note) {
-
         NoteTabContent content = new NoteTabContent();
         content.note = note;
-
         content.container = new VBox(10);
         content.container.setPadding(new Insets(10));
 
         // ===== TOOLBAR =====
         HBox toolbar = new HBox(10);
         toolbar.setPadding(new Insets(5));
-        toolbar.setStyle("-fx-background-color: #f0f0f0;");
 
         content.editModeButton = new ToggleButton("✏️ Редактировать");
         content.previewModeButton = new ToggleButton("👁️ Просмотр");
@@ -712,38 +804,30 @@ public class MainController {
 
         // ===== EDIT =====
         content.editArea = new VBox(5);
-
         content.titleField = new TextField(note.getTitle());
-        content.titleField.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        content.titleField.setFont(javafx.scene.text.Font.font(24));
 
         content.contentTextArea = new TextArea(note.getBodyContent());
         content.contentTextArea.setWrapText(true);
-
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
 
         // ===== PREVIEW =====
         content.webView = new WebView();
-        content.webView.getEngine().setJavaScriptEnabled(true); // ✅ ВКЛЮЧАЕМ JavaScript!
-
+        content.webView.getEngine().setJavaScriptEnabled(true);
         content.previewScrollPane = new ScrollPane(content.webView);
         content.previewScrollPane.setFitToWidth(true);
         content.previewScrollPane.setVisible(false);
         content.previewScrollPane.setManaged(false);
 
-        // 🔥 УСТАНОВКА JAVASCRIPT BRIDGE
+        // JavaScript Bridge
         content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
                     JSObject window = (JSObject) content.webView.getEngine().executeScript("window");
-
-                    // Создаем Java объект для вызова из JavaScript
                     JavaBridge bridge = new JavaBridge();
-
-                    // Устанавливаем bridge в window.javaApp
                     window.setMember("javaApp", bridge);
-
                     logger.info("✅ JavaScript bridge установлен для заметки: {}", note.getTitle());
                 } catch (Exception e) {
                     logger.error("❌ Ошибка установки JavaScript bridge", e);
@@ -751,13 +835,20 @@ public class MainController {
             }
         });
 
+        // СЛУШАТЕЛЬ ТЕМЫ для WebView
+        themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
+            // Обновляем preview только если он видим
+            if (content.previewScrollPane != null && content.previewScrollPane.isVisible()) {
+                updatePreview(content);
+            }
+        });
+
         // ===== META =====
         HBox meta = new HBox(20);
-
-        Label created = new Label("Создано: " + note.getCreated());
-        Label updated = new Label("Изменено: " + note.getModified());
-
-        meta.getChildren().addAll(created, updated);
+        content.createdLabel = new Label("Создано: " + note.getCreated());
+        content.updatedLabel = new Label("Изменено: " + note.getModified());
+        content.linksCountLabel = new Label("Связей: " + note.getOutgoingLinks().size());
+        meta.getChildren().addAll(content.createdLabel, content.updatedLabel, content.linksCountLabel);
 
         content.container.getChildren().addAll(
                 toolbar,
@@ -765,6 +856,9 @@ public class MainController {
                 content.previewScrollPane,
                 meta
         );
+
+        // Применяем тему
+        applyThemeToNoteContent(content, themeManager.getCurrentTheme());
 
         return content;
     }

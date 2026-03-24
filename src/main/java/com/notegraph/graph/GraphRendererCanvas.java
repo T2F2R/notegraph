@@ -1,8 +1,8 @@
 package com.notegraph.graph;
 
+import com.notegraph.ui.Theme;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
 
 import java.util.List;
 
@@ -12,23 +12,37 @@ public class GraphRendererCanvas {
     private final GraphicsContext g;
     private final GraphCamera camera;
 
-    // 🎨 ТЕМА (можно потом переключать)
-    private final Color background = Color.WHITE;
-    private final Color edgeColor = Color.web("#d0d0d0");
-    private final Color nodeColor = Color.web("#4a90e2");
-    private final Color hoverColor = Color.web("#ff9800");
-    private final Color textColor = Color.BLACK;
+    private Theme theme = Theme.DARK;
+
+    // Кешируем последний список для перерисовки
+    private List<GraphNode> lastNodes;
+    private List<GraphEdge> lastEdges;
 
     public GraphRendererCanvas(Canvas canvas, GraphCamera camera) {
         this.canvas = canvas;
         this.g = canvas.getGraphicsContext2D();
         this.camera = camera;
+        System.out.println("GraphRendererCanvas создан с темой: DARK");
+    }
+
+    public void setTheme(Theme theme) {
+        this.theme = theme;
+        System.out.println("GraphRendererCanvas.setTheme вызван: " + (theme == Theme.DARK ? "DARK" : "LIGHT"));
+
+        // ПРИНУДИТЕЛЬНАЯ ПЕРЕРИСОВКА с новой темой
+        if (lastNodes != null && lastEdges != null) {
+            System.out.println("GraphRendererCanvas: принудительная перерисовка");
+            render(lastNodes, lastEdges);
+        }
     }
 
     public void render(List<GraphNode> nodes, List<GraphEdge> edges) {
+        // Сохраняем для перерисовки при смене темы
+        this.lastNodes = nodes;
+        this.lastEdges = edges;
 
-        // 🔥 БЕЛЫЙ ФОН
-        g.setFill(background);
+        // Фон - используем тему!
+        g.setFill(theme.background);
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
         drawEdges(edges);
@@ -36,9 +50,8 @@ public class GraphRendererCanvas {
     }
 
     private void drawEdges(List<GraphEdge> edges) {
-
-        g.setStroke(edgeColor);
-        g.setLineWidth(1);
+        g.setStroke(theme.edgeColor);
+        g.setLineWidth(1.5);
 
         for (GraphEdge e : edges) {
             g.strokeLine(
@@ -51,25 +64,31 @@ public class GraphRendererCanvas {
     }
 
     private void drawNodes(List<GraphNode> nodes) {
-
         for (GraphNode n : nodes) {
-
             double x = camera.worldToScreenX(n.x);
             double y = camera.worldToScreenY(n.y);
+            double radius = 5 * camera.zoom;
 
-            // 🎯 hover
-            if (n.hovered) {
-                g.setFill(hoverColor);
+            // Цвет узла из темы
+            if (n.selected) {
+                g.setFill(theme.nodeColorSelected);
+            } else if (n.hovered) {
+                g.setFill(theme.nodeColorHovered);
             } else {
-                g.setFill(nodeColor);
+                g.setFill(theme.nodeColor);
             }
 
-            g.fillOval(x - 5, y - 5, 10, 10);
+            g.fillOval(x - radius, y - radius, radius * 2, radius * 2);
 
-            // 📝 текст
+            // Обводка
+            g.setStroke(theme.nodeBorder);
+            g.setLineWidth(1.5);
+            g.strokeOval(x - radius, y - radius, radius * 2, radius * 2);
+
+            // Текст
             if (n.hovered || camera.zoom > 1.5) {
-                g.setFill(textColor);
-                g.fillText(n.id, x + 8, y);
+                g.setFill(theme.text);
+                g.fillText(n.id, x + radius + 5, y + 4);
             }
         }
     }

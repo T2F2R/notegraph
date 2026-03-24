@@ -1,14 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
-
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-
-<BorderPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.notegraph.controller.MainController"
-            prefHeight="700.0" prefWidth="1200.0">
-
+<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:id="rootPane" fx:controller="com.notegraph.controller.MainController" prefHeight="700.0" prefWidth="1200.0">
     <top>
         <VBox>
             <MenuBar>
@@ -28,9 +21,11 @@
                 <Menu text="Поиск">
                     <MenuItem text="Найти" onAction="#handleSearch" accelerator="Ctrl+F"/>
                 </Menu>
+                <Menu text="Вид">
+                    <MenuItem text="Переключить тему" onAction="#handleToggleTheme" accelerator="Ctrl+T"/>
+                </Menu>
                 <Menu text="Граф">
-                    <MenuItem text="Открыть граф заметок"
-                              onAction="#handleOpenGraph"/>
+                    <MenuItem text="Открыть граф заметок" onAction="#handleOpenGraph"/>
                 </Menu>
             </MenuBar>
             <ToolBar>
@@ -68,7 +63,7 @@
         </SplitPane>
     </center>
     <bottom>
-        <HBox spacing="10" alignment="CENTER_LEFT" style="-fx-background-color: #f0f0f0; -fx-padding: 5;">
+        <HBox spacing="10" alignment="CENTER_LEFT" style="-fx-padding: 5;">
             <Label text="NoteGraph"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="autoSaveLabel" text="✓ Сохранено" visible="false" style="-fx-text-fill: green;"/>

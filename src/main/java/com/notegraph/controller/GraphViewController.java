@@ -3,6 +3,8 @@ package com.notegraph.controller;
 import com.notegraph.graph.*;
 import com.notegraph.model.Note;
 import com.notegraph.service.impl.NoteServiceImpl;
+import com.notegraph.ui.Theme;
+import com.notegraph.ui.ThemeManager;
 import com.notegraph.util.LinkIndexManager;
 
 import javafx.animation.AnimationTimer;
@@ -21,9 +23,11 @@ public class GraphViewController {
     private GraphData graph;
 
     private final NoteServiceImpl noteService = new NoteServiceImpl();
+    private final ThemeManager themeManager = ThemeManager.getInstance();
 
     @FXML
     public void initialize() {
+        System.out.println("GraphViewController.initialize() вызван");
 
         camera = new GraphCamera();
 
@@ -31,7 +35,25 @@ public class GraphViewController {
                 LinkIndexManager.getInstance().getGraph()
         );
 
+        // Создаем рендерер
         renderer = new GraphRendererCanvas(graphCanvas, camera);
+
+        // СРАЗУ читаем текущую тему и применяем
+        Theme currentTheme = themeManager.getCurrentTheme();
+        System.out.println("GraphViewController: читаем текущую тему = " +
+                (currentTheme == Theme.DARK ? "DARK" : "LIGHT"));
+
+        renderer.setTheme(currentTheme);
+        System.out.println("GraphViewController: setTheme вызван");
+
+        // Слушаем изменения темы
+        themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
+            System.out.println("GraphViewController: тема изменилась -> " +
+                    (newTheme == Theme.DARK ? "DARK" : "LIGHT"));
+            renderer.setTheme(newTheme);
+        });
+
+        System.out.println("GraphViewController: слушатель установлен");
 
         new GraphInteractionController(
                 graphCanvas,
@@ -56,10 +78,7 @@ public class GraphViewController {
         }.start();
     }
 
-    // 🔥 Открытие заметки (через новую вкладку окна)
     private void openNoteInTab(Note note) {
         System.out.println("Открытие заметки: " + note.getTitle());
-        // если нужно — можно прокинуть MainController
-        // или открыть через событие / singleton
     }
 }
