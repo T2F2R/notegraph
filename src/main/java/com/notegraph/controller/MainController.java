@@ -3,8 +3,7 @@ package com.notegraph.controller;
 import com.notegraph.graph.*;
 import com.notegraph.model.Note;
 import com.notegraph.service.impl.NoteServiceImpl;
-import com.notegraph.ui.Theme;
-import com.notegraph.ui.ThemeManager;
+import com.notegraph.ui.*;
 import com.notegraph.util.FileSystemManager;
 import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
@@ -13,23 +12,30 @@ import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
-import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.*;
+import javafx.scene.text.Font;
 import javafx.scene.web.WebView;
-import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.List;
 
 /**
  * Главный контроллер приложения NoteGraph.
@@ -53,6 +59,7 @@ public class MainController {
     @FXML private CheckMenuItem menuPreviewMode;
     @FXML private VBox placeholderPane;
     @FXML private TreeView<Path> notesTreeView;
+    @FXML private BorderPane rootPane;
 
     private final Map<Path, Tab> openTabs = new HashMap<>();
     private Timer autoSaveTimer;
@@ -64,7 +71,7 @@ public class MainController {
     private boolean isSearchVisible = false;
 
     private final ThemeManager themeManager = ThemeManager.getInstance();
-    @FXML private BorderPane rootPane;
+    private final FontManager fontManager = FontManager.getInstance();
 
     private static class SearchResult {
         Path notePath;
@@ -108,7 +115,7 @@ public class MainController {
                 Optional<Note> noteOpt = noteService.getNoteByTitle(noteTitle);
 
                 if (noteOpt.isPresent()) {
-                    openNoteInTab(noteOpt.get()); // 🔥 ВСЕГДА новая вкладка
+                    openNoteInTab(noteOpt.get());
                 } else {
                     try {
                         Note newNote = noteService.createNote(noteTitle, "");
@@ -135,13 +142,104 @@ public class MainController {
         refreshTree();
         updateNotesCount();
         setupTheme();
+        updateTexts();
+        fontManager.fontFamilyProperty().addListener((obs, oldVal, newVal) -> {
+            applyGlobalFont();
+        });
+
+        fontManager.fontSizeProperty().addListener((obs, oldVal, newVal) -> {
+            applyGlobalFont();
+        });
+
+        rootPane.getStylesheets().add(
+                getClass().getResource("/css/app.css").toExternalForm()
+        );
+    }
+
+    private void updateTexts() {
+        LanguageManager lm = LanguageManager.getInstance();
+
+        if (notesCountLabel != null) {
+            notesCountLabel.setText(
+                    lm.format("notes.count", 0)
+            );
+        }
+
+        if (autoSaveLabel != null) {
+            autoSaveLabel.setText(
+                    lm.get("status.saved")
+            );
+        }
+    }
+
+    public void handleOpenNotesFolder() {
+        new Thread(() -> {
+            try {
+                FileSystemManager fsManager = FileSystemManager.getInstance();
+                File folder = fsManager.getVaultPath().toFile();
+
+                if (!folder.exists()) {
+                    folder.mkdirs();
+                }
+
+                String os = System.getProperty("os.name").toLowerCase();
+
+                if (os.contains("linux")) {
+                    new ProcessBuilder("xdg-open", folder.getAbsolutePath()).start();
+                } else if (os.contains("mac")) {
+                    new ProcessBuilder("open", folder.getAbsolutePath()).start();
+                } else if (os.contains("win")) {
+                    new ProcessBuilder("explorer", folder.getAbsolutePath()).start();
+                } else {
+                    if (Desktop.isDesktopSupported()) {
+                        Desktop.getDesktop().open(folder);
+                    }
+                }
+
+            } catch (Exception e) {
+                logger.error("Ошибка открытия папки", e);
+                // Показываем ошибку в UI потоке
+                javafx.application.Platform.runLater(() -> {
+                    showError("Ошибка", "Не удалось открыть папку: " + e.getMessage());
+                });
+            }
+        }).start();
+    }
+
+    private void setupFontListeners() {
+        fontManager.fontFamilyProperty().addListener((obs, oldVal, newVal) -> {
+            applyTheme(themeManager.getCurrentTheme());
+            saveFontToMetadata();
+            refreshAllPreviews();
+        });
+
+        fontManager.fontSizeProperty().addListener((obs, oldVal, newVal) -> {
+            applyTheme(themeManager.getCurrentTheme());
+            saveFontToMetadata();
+            refreshAllPreviews();
+        });
+    }
+
+    private void saveFontToMetadata() {
+        MetadataManager metadata = MetadataManager.getInstance();
+
+        metadata.setPreference("fontFamily", fontManager.getCurrentFontFamily());
+        metadata.setPreference("fontSize", String.valueOf(fontManager.getCurrentFontSize()));
+    }
+
+    private void refreshAllPreviews() {
+        for (Tab tab : notesTabPane.getTabs()) {
+            if (tab.getUserData() instanceof NoteTabContent content) {
+                if (content.previewScrollPane != null && content.previewScrollPane.isVisible()) {
+                    updatePreview(content);
+                }
+            }
+        }
     }
 
     private void setupTheme() {
-        // Применяем начальную тему
         applyTheme(themeManager.getCurrentTheme());
 
-        // Слушаем изменения темы
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyTheme(newTheme);
         });
@@ -152,9 +250,7 @@ public class MainController {
 
         String bgHex = toHex(theme.background);
         String textHex = toHex(theme.text);
-        String borderHex = toHex(theme.nodeBorder);
 
-        // Применяем глобальные стили
         String globalStyle = String.format("""
         -fx-base: %s;
         -fx-background: %s;
@@ -176,24 +272,39 @@ public class MainController {
 
         rootPane.setStyle(globalStyle);
 
-        // ДОБАВЬТЕ: Стили для открытых вкладок с заметками
         for (Tab tab : notesTabPane.getTabs()) {
             if (tab.getUserData() instanceof NoteTabContent) {
                 NoteTabContent content = (NoteTabContent) tab.getUserData();
                 applyThemeToNoteContent(content, theme);
+                applyFontToContent(content);
             }
         }
     }
 
-    // ДОБАВЬТЕ: Новый метод для применения темы к контенту заметки
+    public void switchToRussian() {
+        LanguageManager.getInstance().switchToRussian();
+    }
+
+    public void switchToEnglish() {
+        LanguageManager.getInstance().switchToEnglish();
+    }
+
     private void applyThemeToNoteContent(NoteTabContent content, Theme theme) {
         String bgHex = toHex(theme.background);
         String textHex = toHex(theme.text);
+        String borderHex = toHex(theme.nodeBorder);
 
-        // Стили для кнопок переключения режима
+        String toolbarBg = theme == Theme.DARK ? "#2a2a2a" : "#f0f0f0";
+        if (content.container != null && content.container.getChildren().size() > 0) {
+            var toolbar = content.container.getChildren().get(0);
+            if (toolbar instanceof HBox) {
+                toolbar.setStyle("-fx-background-color: " + toolbarBg + ";");
+            }
+        }
+
         String buttonStyle = String.format(
-                "-fx-background-color: %s; -fx-text-fill: %s; -fx-border-color: %s;",
-                bgHex, textHex, toHex(theme.nodeBorder)
+                "-fx-background-color: %s; -fx-text-fill: %s; -fx-border-color: %s; -fx-border-width: 1;",
+                bgHex, textHex, borderHex
         );
 
         if (content.editModeButton != null) {
@@ -204,23 +315,18 @@ public class MainController {
             content.previewModeButton.setStyle(buttonStyle);
         }
 
-        // Стили для текстовых полей
-        String textFieldStyle = String.format(
-                "-fx-background-color: %s; -fx-text-fill: %s;",
-                bgHex, textHex
-        );
-
-        if (content.titleField != null) {
-            content.titleField.setStyle(textFieldStyle);
-        }
-
-        if (content.contentTextArea != null) {
-            content.contentTextArea.setStyle(textFieldStyle);
-        }
-
-        // Стили для контейнера
         if (content.container != null) {
             content.container.setStyle("-fx-background-color: " + bgHex + ";");
+        }
+
+        if (content.createdLabel != null) {
+            content.createdLabel.setStyle("-fx-text-fill: " + textHex + ";");
+        }
+        if (content.updatedLabel != null) {
+            content.updatedLabel.setStyle("-fx-text-fill: " + textHex + ";");
+        }
+        if (content.linksCountLabel != null) {
+            content.linksCountLabel.setStyle("-fx-text-fill: " + textHex + ";");
         }
     }
 
@@ -232,25 +338,21 @@ public class MainController {
         );
     }
 
-    // 4. Обработчик для меню:
     @FXML
     private void handleToggleTheme() {
         themeManager.toggleTheme();
     }
 
     public void openGraphTab() {
-        // создаём canvas
         Canvas canvas = new Canvas(1200, 800);
         GraphCamera camera = new GraphCamera();
         GraphData graph = GraphLayoutBuilder.build(
                 linkIndexManager.getGraph()
         );
 
-        // ИСПРАВЛЕНИЕ: создаем рендерер и применяем текущую тему
         GraphRendererCanvas renderer = new GraphRendererCanvas(canvas, camera);
         renderer.setTheme(themeManager.getCurrentTheme());
 
-        // ИСПРАВЛЕНИЕ: слушаем изменения темы
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             renderer.setTheme(newTheme);
         });
@@ -265,7 +367,6 @@ public class MainController {
                 }
         );
 
-        // animation loop
         new AnimationTimer() {
             @Override
             public void handle(long now) {
@@ -274,7 +375,6 @@ public class MainController {
             }
         }.start();
 
-        // создаём вкладку
         Tab tab = new Tab("Graph");
         StackPane container = new StackPane(canvas);
         tab.setContent(container);
@@ -311,7 +411,6 @@ public class MainController {
                     setGraphic(null);
                 } else {
                     if (Files.isDirectory(path)) {
-                        // Папка
                         if (path.equals(fsManager.getVaultPath())) {
                             setText("📚 " + path.getFileName().toString());
                         } else {
@@ -319,7 +418,6 @@ public class MainController {
                         }
                         setStyle("-fx-font-weight: bold;");
                     } else if (fsManager.isNote(path)) {
-                        // Заметка
                         String fileName = path.getFileName().toString();
                         String name = fileName.replaceAll("\\.md$", "");
 
@@ -372,12 +470,11 @@ public class MainController {
     private void setupSearch() {
         searchPanel = new VBox(5);
         searchPanel.setPadding(new Insets(10));
-        searchPanel.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0;");
+        searchPanel.setStyle("-fx-border-width: 1 0 0 0;");
         searchPanel.setVisible(false);
         searchPanel.setManaged(false);
 
         Label searchTitle = new Label("Результаты поиска");
-        searchTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
         searchResultsList = new ListView<>();
         searchResultsList.setPrefHeight(200);
@@ -392,7 +489,7 @@ public class MainController {
             }
         });
 
-        Button closeSearchBtn = new Button("✕ Закрыть");
+        Button closeSearchBtn = new Button("Закрыть");
         closeSearchBtn.setOnAction(e -> hideSearch());
 
         HBox searchHeader = new HBox(10, searchTitle, new Region(), closeSearchBtn);
@@ -524,57 +621,51 @@ public class MainController {
      * Открыть заметку в текущей вкладке
      */
     private void openNoteInCurrentTab(Note note) {
-        logger.info("🔹 openNoteInCurrentTab: начинаем для '{}'", note.getTitle());
+        logger.info("openNoteInCurrentTab: начинаем для '{}'", note.getTitle());
 
         if (notesTabPane == null) {
-            logger.error("❌ notesTabPane == null!");
+            logger.error("notesTabPane == null!");
             return;
         }
-        logger.debug("   ✅ notesTabPane существует");
+        logger.debug("notesTabPane существует");
 
         Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
-        logger.debug("   Текущая вкладка: {}", currentTab != null ? currentTab.getText() : "null");
+        logger.debug("Текущая вкладка: {}", currentTab != null ? currentTab.getText() : "null");
 
-        // КРИТИЧЕСКАЯ ПРОВЕРКА: текущая вкладка должна быть заметкой!
         boolean isNoteTab = currentTab != null
                 && currentTab.getUserData() instanceof NoteTabContent;
 
         boolean isPlusTab = currentTab != null
                 && "PLUS_TAB".equals(currentTab.getUserData());
 
-        logger.debug("   Тип вкладки: isNote={}, isPlus={}", isNoteTab, isPlusTab);
+        logger.debug("Тип вкладки: isNote={}, isPlus={}", isNoteTab, isPlusTab);
 
-        // Если текущая вкладка НЕ заметка (например, Граф) - создаем новую вкладку
         if (currentTab == null || isPlusTab || !isNoteTab) {
-            logger.info("   → Текущая вкладка НЕ является заметкой, создаем новую вкладку");
+            logger.info("Текущая вкладка НЕ является заметкой, создаем новую вкладку");
             openNoteInTab(note);
             return;
         }
 
-        // ПРОВЕРЯЕМ ЧТО ЗАМЕТКА ДЕЙСТВИТЕЛЬНО СУЩЕСТВУЕТ В TABPANE
         if (openTabs.containsKey(note.getPath())) {
-            logger.info("   → Заметка найдена в openTabs");
+            logger.info("Заметка найдена в openTabs");
             Tab existingTab = openTabs.get(note.getPath());
 
-            // КРИТИЧЕСКАЯ ПРОВЕРКА: вкладка должна быть в TabPane
             if (!notesTabPane.getTabs().contains(existingTab)) {
-                logger.error("   ❌ РАССИНХРОНИЗАЦИЯ: вкладка в openTabs, но НЕ в TabPane!");
-                logger.info("   → Удаляем из openTabs и создаем заново");
+                logger.error("РАССИНХРОНИЗАЦИЯ: вкладка в openTabs, но НЕ в TabPane!");
+                logger.info("Удаляем из openTabs и создаем заново");
                 openTabs.remove(note.getPath());
-                // НЕ возвращаемся, продолжаем создание новой вкладки
             } else {
-                logger.debug("   ✅ Вкладка существует в TabPane");
+                logger.debug("Вкладка существует в TabPane");
 
-                // Переключаемся на существующую вкладку
                 Platform.runLater(() -> {
                     int index = notesTabPane.getTabs().indexOf(existingTab);
-                    logger.debug("   Индекс вкладки: {}", index);
+                    logger.debug("Индекс вкладки: {}", index);
 
                     if (index >= 0) {
                         notesTabPane.getSelectionModel().select(index);
-                        logger.info("   ✅ Вкладка выбрана по индексу {}", index);
+                        logger.info("Вкладка выбрана по индексу {}", index);
                     } else {
-                        logger.error("   ❌ Индекс -1, вкладка исчезла!");
+                        logger.error("Индекс -1, вкладка исчезла!");
                     }
                 });
 
@@ -584,10 +675,9 @@ public class MainController {
 
         logger.debug("   Заметка не открыта, открываем в текущей вкладке");
 
-        // Сохраняем старую заметку (только если это NoteTabContent)
         if (currentTab.getUserData() instanceof NoteTabContent) {
             NoteTabContent oldContent = (NoteTabContent) currentTab.getUserData();
-            logger.debug("   Сохраняем старую заметку: '{}'", oldContent.note.getTitle());
+            logger.debug("Сохраняем старую заметку: '{}'", oldContent.note.getTitle());
 
             if (oldContent.updatedLabel != null && oldContent.linksCountLabel != null) {
                 saveNoteContent(oldContent);
@@ -596,9 +686,9 @@ public class MainController {
                     oldContent.note.setBodyContent(oldContent.contentTextArea.getText());
                     oldContent.note.extractOutgoingLinks();
                     noteService.updateNote(oldContent.note);
-                    logger.debug("   Старая заметка сохранена в файл");
+                    logger.debug("Старая заметка сохранена в файл");
                 } catch (Exception e) {
-                    logger.error("   ❌ Ошибка сохранения при переключении", e);
+                    logger.error("Ошибка сохранения при переключении", e);
                 }
             }
 
@@ -606,36 +696,34 @@ public class MainController {
             logger.debug("   Старая заметка удалена из openTabs");
         }
 
-        // Создаем новый контент
-        logger.debug("   Создаем NoteTabContent для '{}'", note.getTitle());
+        logger.debug("Создаем NoteTabContent для '{}'", note.getTitle());
         NoteTabContent newContent = createTabContent(note);
-        logger.debug("   ✅ NoteTabContent создан");
+        logger.debug("NoteTabContent создан");
 
-        logger.debug("   Устанавливаем текст вкладки: '{}'", note.getTitle());
+        logger.debug("Устанавливаем текст вкладки: '{}'", note.getTitle());
         currentTab.setText(note.getTitle());
 
-        logger.debug("   Устанавливаем content в вкладку");
+        logger.debug("Устанавливаем content в вкладку");
         currentTab.setContent(newContent.container);
 
-        logger.debug("   Устанавливаем userData");
+        logger.debug("Устанавливаем userData");
         currentTab.setUserData(newContent);
 
-        logger.debug("   Добавляем в openTabs: {}", note.getPath());
+        logger.debug("Добавляем в openTabs: {}", note.getPath());
         openTabs.put(note.getPath(), currentTab);
 
         String relativePath = fsManager.getVaultPath().relativize(note.getPath()).toString();
         metadataManager.addRecentNote(relativePath);
-        logger.debug("   Добавлено в recent notes");
+        logger.debug("Добавлено в recent notes");
 
-        logger.info("   ✅ Заметка '{}' открыта в текущей вкладке успешно", note.getTitle());
+        logger.info("Заметка '{}' открыта в текущей вкладке успешно", note.getTitle());
 
-        // Проверяем контент
         if (currentTab.getContent() == null) {
-            logger.error("   ❌ ПРОБЛЕМА: currentTab.getContent() == null после установки!");
+            logger.error("ПРОБЛЕМА: currentTab.getContent() == null после установки!");
         } else {
-            logger.debug("   ✅ currentTab.getContent() установлен корректно");
+            logger.debug("currentTab.getContent() установлен корректно");
             if (!currentTab.getContent().isVisible()) {
-                logger.warn("   ⚠️ Content не видим, делаем видимым");
+                logger.warn("Content не видим, делаем видимым");
                 currentTab.getContent().setVisible(true);
             }
         }
@@ -645,52 +733,44 @@ public class MainController {
      * Открыть заметку в НОВОЙ вкладке
      */
     private void openNoteInTab(Note note) {
-        logger.info("🔸 openNoteInTab: создаем новую вкладку для '{}'", note.getTitle());
+        logger.info("openNoteInTab: создаем новую вкладку для '{}'", note.getTitle());
 
-        // ПРОВЕРЯЕМ ЧТО ЗАМЕТКА ДЕЙСТВИТЕЛЬНО НЕ ОТКРЫТА
         if (openTabs.containsKey(note.getPath())) {
             Tab existingTab = openTabs.get(note.getPath());
 
-            // Проверяем что вкладка существует в TabPane
             if (notesTabPane.getTabs().contains(existingTab)) {
-                logger.info("   → Заметка уже открыта, переключаемся");
+                logger.info("Заметка уже открыта, переключаемся");
                 int index = notesTabPane.getTabs().indexOf(existingTab);
                 notesTabPane.getSelectionModel().select(index);
-                logger.info("   ✅ Переключились на существующую вкладку");
+                logger.info("Переключились на существующую вкладку");
                 return;
             } else {
-                logger.warn("   ⚠️ РАССИНХРОНИЗАЦИЯ: вкладка в openTabs но не в TabPane, очищаем");
+                logger.warn("РАССИНХРОНИЗАЦИЯ: вкладка в openTabs но не в TabPane, очищаем");
                 openTabs.remove(note.getPath());
             }
         }
 
-        // Создаем новую вкладку
-        logger.debug("   Создаем новый Tab");
+        logger.debug("Создаем новый Tab");
         Tab tab = new Tab(note.getTitle());
-        logger.debug("   ✅ Tab создан с текстом: '{}'", tab.getText());
+        logger.debug("Tab создан с текстом: '{}'", tab.getText());
 
-        // Создаем контент
-        logger.debug("   Создаем NoteTabContent");
+        logger.debug("Создаем NoteTabContent");
         NoteTabContent content = createTabContent(note);
-        logger.debug("   ✅ NoteTabContent создан");
+        logger.debug("NoteTabContent создан");
 
-        // Устанавливаем контент
-        logger.debug("   Устанавливаем content.container в tab");
+        logger.debug("Устанавливаем content.container в tab");
         tab.setContent(content.container);
 
-        logger.debug("   Устанавливаем userData");
+        logger.debug("Устанавливаем userData");
         tab.setUserData(content);
 
-        // ВАЖНО: обработчик закрытия с правильной очисткой
         final Path notePath = note.getPath();
         tab.setOnClosed(e -> {
-            logger.debug("   Вкладка '{}' закрывается", note.getTitle());
+            logger.debug("Вкладка '{}' закрывается", note.getTitle());
 
-            // Сохраняем контент
             if (tab.getUserData() instanceof NoteTabContent) {
                 NoteTabContent tabContent = (NoteTabContent) tab.getUserData();
 
-                // Безопасное сохранение
                 try {
                     if (tabContent.note != null && tabContent.contentTextArea != null) {
                         tabContent.note.setBodyContent(tabContent.contentTextArea.getText());
@@ -699,47 +779,41 @@ public class MainController {
                         logger.debug("   Заметка сохранена при закрытии");
                     }
                 } catch (Exception ex) {
-                    logger.error("   Ошибка сохранения при закрытии", ex);
+                    logger.error("Ошибка сохранения при закрытии", ex);
                 }
             }
 
-            // КРИТИЧЕСКИ ВАЖНО: удаляем из openTabs
             openTabs.remove(notePath);
-            logger.debug("   Вкладка '{}' удалена из openTabs, осталось: {}",
+            logger.debug("Вкладка '{}' удалена из openTabs, осталось: {}",
                     note.getTitle(), openTabs.size());
         });
 
-        // Добавляем в openTabs
-        logger.debug("   Добавляем в openTabs");
+        logger.debug("Добавляем в openTabs");
         openTabs.put(note.getPath(), tab);
 
-        // Добавляем вкладку в TabPane
         int tabCount = notesTabPane.getTabs().size();
-        logger.debug("   Текущее количество вкладок: {}", tabCount);
-        logger.debug("   Добавляем вкладку в позицию: {}", tabCount - 1);
+        logger.debug("Текущее количество вкладок: {}", tabCount);
+        logger.debug("Добавляем вкладку в позицию: {}", tabCount - 1);
 
-        notesTabPane.getTabs().add(tabCount - 1, tab); // Перед вкладкой "+"
-        logger.debug("   ✅ Вкладка добавлена в TabPane");
+        notesTabPane.getTabs().add(tabCount - 1, tab);
+        logger.debug("Вкладка добавлена в TabPane");
 
-        // Выбираем вкладку
-        logger.debug("   Выбираем новую вкладку");
+        logger.debug("Выбираем новую вкладку");
         notesTabPane.getSelectionModel().select(tab);
-        logger.debug("   ✅ Вкладка выбрана");
+        logger.debug("Вкладка выбрана");
 
-        // Проверяем что вкладка действительно выбрана
         Tab selectedTab = notesTabPane.getSelectionModel().getSelectedItem();
         if (selectedTab == tab) {
-            logger.info("   ✅ Новая вкладка '{}' успешно создана и выбрана", note.getTitle());
+            logger.info("Новая вкладка '{}' успешно создана и выбрана", note.getTitle());
         } else {
-            logger.error("   ❌ ПРОБЛЕМА: Вкладка создана но не выбрана! Выбрана: '{}'",
+            logger.error("ПРОБЛЕМА: Вкладка создана но не выбрана! Выбрана: '{}'",
                     selectedTab != null ? selectedTab.getText() : "null");
         }
 
-        // Проверяем что вкладка в списке
         if (!notesTabPane.getTabs().contains(tab)) {
-            logger.error("   ❌ КРИТИЧЕСКАЯ ОШИБКА: вкладка не в списке после добавления!");
+            logger.error("КРИТИЧЕСКАЯ ОШИБКА: вкладка не в списке после добавления!");
         } else {
-            logger.debug("   ✅ Вкладка в списке TabPane на позиции {}",
+            logger.debug("Вкладка в списке TabPane на позиции {}",
                     notesTabPane.getTabs().indexOf(tab));
         }
     }
@@ -750,7 +824,6 @@ public class MainController {
     private void cleanupOpenTabs() {
         logger.debug(" Очистка openTabs от устаревших записей");
 
-        // Находим все вкладки которые есть в openTabs но нет в TabPane
         Set<Path> toRemove = new HashSet<>();
 
         for (Map.Entry<Path, Tab> entry : openTabs.entrySet()) {
@@ -758,25 +831,24 @@ public class MainController {
             Tab tab = entry.getValue();
 
             if (!notesTabPane.getTabs().contains(tab)) {
-                logger.warn("   ⚠️ Найдена рассинхронизация: {} не в TabPane", path.getFileName());
+                logger.warn("Найдена рассинхронизация: {} не в TabPane", path.getFileName());
                 toRemove.add(path);
             }
         }
 
-        // Удаляем устаревшие записи
         for (Path path : toRemove) {
             openTabs.remove(path);
-            logger.debug("   Удалено из openTabs: {}", path.getFileName());
+            logger.debug("Удалено из openTabs: {}", path.getFileName());
         }
 
         if (toRemove.isEmpty()) {
-            logger.debug("   ✅ Рассинхронизаций не найдено");
+            logger.debug("Рассинхронизаций не найдено");
         } else {
-            logger.info("   ✅ Очищено {} устаревших записей", toRemove.size());
+            logger.info("Очищено {} устаревших записей", toRemove.size());
         }
 
-        logger.debug("   Текущий размер openTabs: {}", openTabs.size());
-        logger.debug("   Текущее количество вкладок: {}", notesTabPane.getTabs().size() - 1); // -1 для вкладки "+"
+        logger.debug("Текущий размер openTabs: {}", openTabs.size());
+        logger.debug("Текущее количество вкладок: {}", notesTabPane.getTabs().size() - 1);
     }
 
     private NoteTabContent createTabContent(Note note) {
@@ -785,7 +857,6 @@ public class MainController {
         content.container = new VBox(10);
         content.container.setPadding(new Insets(10));
 
-        // ===== TOOLBAR =====
         HBox toolbar = new HBox(10);
         toolbar.setPadding(new Insets(5));
 
@@ -800,20 +871,24 @@ public class MainController {
         content.editModeButton.setOnAction(e -> switchToEditMode(content));
         content.previewModeButton.setOnAction(e -> switchToPreviewMode(content));
 
+        content.editModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
+            updateToggleButtonsStyle(content);
+        });
+
+        content.previewModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
+            updateToggleButtonsStyle(content);
+        });
+
         toolbar.getChildren().addAll(content.editModeButton, content.previewModeButton);
 
-        // ===== EDIT =====
         content.editArea = new VBox(5);
         content.titleField = new TextField(note.getTitle());
-        content.titleField.setFont(javafx.scene.text.Font.font(24));
-
         content.contentTextArea = new TextArea(note.getBodyContent());
         content.contentTextArea.setWrapText(true);
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
 
-        // ===== PREVIEW =====
         content.webView = new WebView();
         content.webView.getEngine().setJavaScriptEnabled(true);
         content.previewScrollPane = new ScrollPane(content.webView);
@@ -821,29 +896,30 @@ public class MainController {
         content.previewScrollPane.setVisible(false);
         content.previewScrollPane.setManaged(false);
 
-        // JavaScript Bridge
         content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
                     JSObject window = (JSObject) content.webView.getEngine().executeScript("window");
                     JavaBridge bridge = new JavaBridge();
                     window.setMember("javaApp", bridge);
-                    logger.info("✅ JavaScript bridge установлен для заметки: {}", note.getTitle());
                 } catch (Exception e) {
-                    logger.error("❌ Ошибка установки JavaScript bridge", e);
+                    logger.error("JS bridge error", e);
                 }
             }
         });
 
-        // СЛУШАТЕЛЬ ТЕМЫ для WebView
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
-            // Обновляем preview только если он видим
-            if (content.previewScrollPane != null && content.previewScrollPane.isVisible()) {
+            applyThemeToNoteContent(content, newTheme);
+            updateToggleButtonsStyle(content);
+
+            if (content.previewScrollPane.isVisible()) {
                 updatePreview(content);
             }
         });
 
-        // ===== META =====
+        fontManager.fontFamilyProperty().addListener((obs, o, n) -> applyFontToContent(content));
+        fontManager.fontSizeProperty().addListener((obs, o, n) -> applyFontToContent(content));
+
         HBox meta = new HBox(20);
         content.createdLabel = new Label("Создано: " + note.getCreated());
         content.updatedLabel = new Label("Изменено: " + note.getModified());
@@ -857,10 +933,91 @@ public class MainController {
                 meta
         );
 
-        // Применяем тему
         applyThemeToNoteContent(content, themeManager.getCurrentTheme());
+        applyFontToContent(content);
+        updateToggleButtonsStyle(content);
 
         return content;
+    }
+
+    private void updateToggleButtonsStyle(NoteTabContent content) {
+        Theme theme = themeManager.getCurrentTheme();
+
+        String bg = toHex(theme.background);
+        String text = toHex(theme.text);
+        String accent = toHex(theme.nodeColor);
+
+        String normal = String.format(
+                "-fx-background-color: %s; -fx-text-fill: %s;",
+                bg, text
+        );
+
+        String selected = String.format(
+                "-fx-background-color: %s; -fx-text-fill: white;",
+                accent
+        );
+
+        if (content.editModeButton.isSelected()) {
+            content.editModeButton.setStyle(selected);
+            content.previewModeButton.setStyle(normal);
+        } else {
+            content.previewModeButton.setStyle(selected);
+            content.editModeButton.setStyle(normal);
+        }
+    }
+
+    private void applyFontToContent(NoteTabContent content) {
+        String fontFamily = fontManager.getCurrentFontFamily();
+        double fontSize = fontManager.getCurrentFontSize();
+
+        System.out.println("APPLY FONT: " + fontFamily + " " + fontSize);
+
+        Theme theme = themeManager.getCurrentTheme();
+        String bgHex = toHex(theme.background);
+        String textHex = toHex(theme.text);
+
+        if (content.titleField != null) {
+            String style = String.format(
+                    "-fx-font: %.1fpx '%s'; " +
+                            "-fx-background-color: %s; " +
+                            "-fx-text-fill: %s;",
+                    fontSize + 10, fontFamily, bgHex, textHex
+            );
+            content.titleField.setStyle(style);
+        }
+
+        if (content.contentTextArea != null) {
+            String style = String.format(
+                    "-fx-font: %.1fpx '%s'; " +
+                            "-fx-control-inner-background: %s; " +
+                            "-fx-text-fill: %s; " +
+                            "-fx-background-color: %s;",
+                    fontSize, fontFamily, bgHex, textHex, bgHex
+            );
+            content.contentTextArea.setStyle(style);
+        }
+    }
+
+    private void applyGlobalFont() {
+        if (rootPane == null) return;
+
+        String style = rootPane.getStyle();
+
+        style += String.format("""
+        -fx-font-family: "%s";
+        -fx-font-size: %dpx;
+        """,
+                fontManager.getCurrentFontFamily(),
+                fontManager.getCurrentFontSize()
+        );
+
+        rootPane.setStyle(style);
+    }
+
+    @FXML
+    private void handleFontSettings() {
+        System.out.println("OPEN FONT DIALOG");
+        new FontSelectorDialog().showAndApply();
     }
 
     private void switchToEditMode(NoteTabContent c) {
@@ -878,7 +1035,6 @@ public class MainController {
         content.previewScrollPane.setVisible(true);
         content.previewScrollPane.setManaged(true);
 
-        // Обновляем preview
         updatePreview(content);
     }
 
@@ -938,14 +1094,11 @@ public class MainController {
         }
 
         try {
-            // Обновляем контент заметки
             content.note.setBodyContent(content.contentTextArea.getText());
             content.note.extractOutgoingLinks();
 
-            // Сохраняем в файл
             noteService.updateNote(content.note);
 
-            // Обновляем UI только если компоненты созданы
             if (content.updatedLabel != null) {
                 content.updatedLabel.setText("Изменено: " + content.note.getModified());
             }
@@ -964,25 +1117,21 @@ public class MainController {
     }
 
     private void openOrCreateNote(String title) {
-        logger.info("═══════════════════════════════════════════════════════");
-        logger.info("🔍 openOrCreateNote вызван для: '{}'", title);
-        logger.info("═══════════════════════════════════════════════════════");
+        logger.info("openOrCreateNote вызван для: '{}'", title);
 
-        // ДИАГНОСТИКА СОСТОЯНИЯ TABPANE
-        logger.info("📊 ДИАГНОСТИКА TabPane:");
-        logger.info("   Всего вкладок: {}", notesTabPane.getTabs().size());
+        logger.info("ДИАГНОСТИКА TabPane:");
+        logger.info("Всего вкладок: {}", notesTabPane.getTabs().size());
 
         Tab selectedTab = notesTabPane.getSelectionModel().getSelectedItem();
-        logger.info("   Выбрана вкладка: {}", selectedTab != null ? selectedTab.getText() : "null");
+        logger.info("Выбрана вкладка: {}", selectedTab != null ? selectedTab.getText() : "null");
 
         if (selectedTab != null) {
             Object userData = selectedTab.getUserData();
-            logger.info("   userData тип: {}", userData != null ? userData.getClass().getSimpleName() : "null");
-            logger.info("   userData == PLUS_TAB: {}", "PLUS_TAB".equals(userData));
-            logger.info("   userData instanceof NoteTabContent: {}", userData instanceof NoteTabContent);
+            logger.info("userData тип: {}", userData != null ? userData.getClass().getSimpleName() : "null");
+            logger.info("userData == PLUS_TAB: {}", "PLUS_TAB".equals(userData));
+            logger.info("userData instanceof NoteTabContent: {}", userData instanceof NoteTabContent);
         }
 
-        // Логируем все открытые вкладки
         logger.info("   Список всех вкладок:");
         for (int i = 0; i < notesTabPane.getTabs().size(); i++) {
             Tab tab = notesTabPane.getTabs().get(i);
@@ -996,15 +1145,13 @@ public class MainController {
             logger.info("      [{}] {} - тип: {} - выбрана: {}", i, tab.getText(), type, isSelected);
         }
 
-        // ДИАГНОСТИКА openTabs
-        logger.info("📋 openTabs содержит {} записей:", openTabs.size());
+        logger.info("openTabs содержит {} записей:", openTabs.size());
         for (Map.Entry<Path, Tab> entry : openTabs.entrySet()) {
             Tab tab = entry.getValue();
             boolean inTabPane = notesTabPane.getTabs().contains(tab);
             logger.info("   {} → в TabPane: {}", entry.getKey().getFileName(), inTabPane);
         }
 
-        // Очистка
         cleanupOpenTabs();
 
         try {
@@ -1015,61 +1162,57 @@ public class MainController {
                 Note note = existing.get();
                 logger.debug("   Путь: {}", note.getPath());
 
-                // КРИТИЧЕСКИЙ МОМЕНТ: проверяем тип ВЫБРАННОЙ вкладки
                 Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
 
-                logger.info("🔎 Анализ текущей вкладки:");
-                logger.info("   Текущая: {}", currentTab != null ? currentTab.getText() : "null");
+                logger.info("Анализ текущей вкладки:");
+                logger.info("Текущая: {}", currentTab != null ? currentTab.getText() : "null");
 
                 if (currentTab != null) {
                     Object userData = currentTab.getUserData();
                     boolean isNote = userData instanceof NoteTabContent;
                     boolean isPlus = "PLUS_TAB".equals(userData);
 
-                    logger.info("   isNoteTab: {}", isNote);
-                    logger.info("   isPlusTab: {}", isPlus);
+                    logger.info("isNoteTab: {}", isNote);
+                    logger.info("isPlusTab: {}", isPlus);
 
                     if (isNote) {
-                        logger.info("   ✅ Текущая вкладка - ЗАМЕТКА, открываем в ней");
+                        logger.info("Текущая вкладка - ЗАМЕТКА, открываем в ней");
                         openNoteInCurrentTab(note);
                     } else if (isPlus) {
-                        logger.info("   ⊕ Текущая вкладка - PLUS, создаем новую вкладку");
+                        logger.info("Текущая вкладка - PLUS, создаем новую вкладку");
                         openNoteInTab(note);
                     } else {
-                        logger.info("   🎨 Текущая вкладка - НЕ ЗАМЕТКА (граф?), создаем новую вкладку");
+                        logger.info("Текущая вкладка - НЕ ЗАМЕТКА (граф?), создаем новую вкладку");
                         openNoteInTab(note);
                     }
                 } else {
-                    logger.info("   ℹ️ Нет текущей вкладки, создаем новую");
+                    logger.info("Нет текущей вкладки, создаем новую");
                     openNoteInTab(note);
                 }
 
-                logger.info("✅ Заметка '{}' открыта успешно", title);
+                logger.info("Заметка '{}' открыта успешно", title);
             } else {
-                logger.info("🆕 Заметка '{}' не найдена, создаем новую", title);
+                logger.info("Заметка '{}' не найдена, создаем новую", title);
 
                 Note newNote = noteService.createNote(title, "");
-                logger.info("✅ Заметка '{}' создана", title);
+                logger.info("Заметка '{}' создана", title);
 
-                // Новые заметки всегда в новой вкладке
                 openNoteInTab(newNote);
 
                 refreshTree();
                 updateNotesCount();
 
-                logger.info("✅ Новая заметка '{}' открыта", title);
+                logger.info("Новая заметка '{}' открыта", title);
             }
         } catch (Exception e) {
-            logger.error("❌ ОШИБКА: {}", e.getMessage(), e);
+            logger.error("ОШИБКА: {}", e.getMessage(), e);
             showError("Ошибка", e.getMessage());
         }
 
-        // ДИАГНОСТИКА ПОСЛЕ
-        logger.info("📊 СОСТОЯНИЕ ПОСЛЕ:");
+        logger.info("СОСТОЯНИЕ ПОСЛЕ:");
         Tab nowSelected = notesTabPane.getSelectionModel().getSelectedItem();
         logger.info("   Теперь выбрана: {}", nowSelected != null ? nowSelected.getText() : "null");
         logger.info("   openTabs размер: {}", openTabs.size());
-        logger.info("═══════════════════════════════════════════════════════");
     }
 
     private void setupSorting() {
@@ -1150,7 +1293,7 @@ public class MainController {
         plusTab.setClosable(false);
         plusTab.setUserData("PLUS_TAB");
         Label lbl = new Label("+");
-        lbl.setStyle("-fx-font-size: 16px; -fx-cursor: hand;");
+        lbl.setStyle("-fx-cursor: hand;");
         lbl.setOnMouseClicked(e -> {
             handleNewNote();
             e.consume();
@@ -1269,7 +1412,7 @@ public class MainController {
     @FXML
     private void handleNewFolder() {
 
-        Path parentDir = getTargetDirectory(); // 🔥 вместо ручной логики
+        Path parentDir = getTargetDirectory();
 
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Новая папка");
@@ -1576,15 +1719,15 @@ public class MainController {
         TreeItem<Path> selected = notesTreeView.getSelectionModel().getSelectedItem();
 
         if (selected == null || selected.getValue() == null) {
-            return fsManager.getVaultPath(); // root
+            return fsManager.getVaultPath();
         }
 
         Path selectedPath = selected.getValue();
 
         if (Files.isDirectory(selectedPath)) {
-            return selectedPath; // папка выбрана
+            return selectedPath;
         } else {
-            return selectedPath.getParent(); // выбрана заметка
+            return selectedPath.getParent();
         }
     }
 
@@ -1600,12 +1743,10 @@ public class MainController {
     public void shutdown() {
         logger.info("Завершение работы контроллера");
 
-        // Сохраняем все открытые заметки
         for (Tab tab : notesTabPane.getTabs()) {
             if (tab.getUserData() instanceof NoteTabContent) {
                 NoteTabContent content = (NoteTabContent) tab.getUserData();
 
-                // Безопасное сохранение без обновления UI
                 try {
                     if (content.note != null && content.contentTextArea != null) {
                         content.note.setBodyContent(content.contentTextArea.getText());
@@ -1619,7 +1760,6 @@ public class MainController {
             }
         }
 
-        // Останавливаем таймер автосохранения
         if (autoSaveTimer != null) {
             autoSaveTimer.cancel();
             autoSaveTimer = null;
@@ -1651,11 +1791,11 @@ public class MainController {
 
             Platform.runLater(() -> {
                 try {
-                    logger.info("📝 Открываем заметку '{}'", title);
+                    logger.info("Открываем заметку '{}'", title);
                     openOrCreateNote(title);
-                    logger.info("✅ Заметка '{}' открыта", title);
+                    logger.info("Заметка '{}' открыта", title);
                 } catch (Exception e) {
-                    logger.error("❌ Ошибка открытия '{}': {}", title, e.getMessage(), e);
+                    logger.error("Ошибка открытия '{}': {}", title, e.getMessage(), e);
                     showError("Ошибка", e.getMessage());
                 }
             });

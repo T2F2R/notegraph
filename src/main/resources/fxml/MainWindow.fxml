@@ -1,72 +1,132 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:id="rootPane" fx:controller="com.notegraph.controller.MainController" prefHeight="700.0" prefWidth="1200.0">
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:id="rootPane"
+            fx:controller="com.notegraph.controller.MainController"
+            prefHeight="700.0"
+            prefWidth="1200.0">
+
     <top>
         <VBox>
+
+            <!-- MENU -->
             <MenuBar>
-                <Menu text="Файл">
-                    <MenuItem text="Новая заметка" onAction="#handleNewNote" accelerator="Ctrl+N"/>
-                    <MenuItem text="Ежедневная заметка" onAction="#handleDailyNote" accelerator="Ctrl+D"/>
-                    <MenuItem text="Новая папка" onAction="#handleNewFolder" accelerator="Ctrl+Shift+N"/>
-                    <MenuItem text="Сохранить" onAction="#handleSave" accelerator="Ctrl+S"/>
+                <Menu text="%menu.file">
+                    <MenuItem text="%file.newNote" onAction="#handleNewNote" accelerator="Ctrl+N"/>
+                    <MenuItem text="%file.dailyNote" onAction="#handleDailyNote" accelerator="Ctrl+D"/>
+                    <MenuItem text="%file.newFolder" onAction="#handleNewFolder" accelerator="Ctrl+Shift+N"/>
+                    <MenuItem text="%file.save" onAction="#handleSave" accelerator="Ctrl+S"/>
                     <SeparatorMenuItem/>
-                    <MenuItem text="Выход" onAction="#handleExit" accelerator="Ctrl+Q"/>
+                    <MenuItem text="%file.exit" onAction="#handleExit" accelerator="Ctrl+Q"/>
                 </Menu>
-                <Menu text="Правка">
-                    <MenuItem text="Вырезать" onAction="#handleCut" accelerator="Ctrl+X"/>
-                    <MenuItem text="Вставить" onAction="#handlePaste" accelerator="Ctrl+V"/>
-                    <MenuItem text="Удалить" onAction="#handleDelete" accelerator="Delete"/>
+
+                <Menu text="%menu.edit">
+                    <MenuItem text="%edit.cut" onAction="#handleCut" accelerator="Ctrl+X"/>
+                    <MenuItem text="%edit.paste" onAction="#handlePaste" accelerator="Ctrl+V"/>
+                    <MenuItem text="%edit.delete" onAction="#handleDelete" accelerator="Delete"/>
                 </Menu>
-                <Menu text="Поиск">
-                    <MenuItem text="Найти" onAction="#handleSearch" accelerator="Ctrl+F"/>
+
+                <Menu text="%menu.search">
+                    <MenuItem text="%search.find" onAction="#handleSearch" accelerator="Ctrl+F"/>
                 </Menu>
-                <Menu text="Вид">
-                    <MenuItem text="Переключить тему" onAction="#handleToggleTheme" accelerator="Ctrl+T"/>
+
+                <Menu text="%menu.view">
+                    <MenuItem text="%view.theme" onAction="#handleToggleTheme" accelerator="Ctrl+T"/>
+                    <MenuItem text="%view.font" onAction="#handleFontSettings" accelerator="Ctrl+Shift+F"/>
                 </Menu>
-                <Menu text="Граф">
-                    <MenuItem text="Открыть граф заметок" onAction="#handleOpenGraph"/>
+
+                <Menu text="%menu.graph">
+                    <MenuItem text="%graph.open" onAction="#handleOpenGraph"/>
+                </Menu>
+
+                <!-- LANGUAGE SWITCH -->
+                <Menu text="%menu.language">
+                    <MenuItem text="Русский" onAction="#switchToRussian"/>
+                    <MenuItem text="English" onAction="#switchToEnglish"/>
                 </Menu>
             </MenuBar>
+
             <ToolBar>
-                <Button text="Новая заметка" onAction="#handleNewNote"/>
-                <Button text="Сегодня" onAction="#handleDailyNote" style="-fx-font-size: 12px; -fx-background-color: #4CAF50; -fx-text-fill: white;"/>
+                <Button text="%toolbar.newNote" onAction="#handleNewNote"/>
+                <Button text="%toolbar.today" onAction="#handleDailyNote"/>
+                <Button text="%toolbar.openFolder" onAction="#handleOpenNotesFolder"/>
+
                 <Separator orientation="VERTICAL"/>
-                <Label text="Поиск:"/>
-                <TextField fx:id="searchField" promptText="Поиск..." prefWidth="200"/>
-                <Button text="Найти" onAction="#handleSearch"/>
+
+                <Label text="%toolbar.search"/>
+                <TextField fx:id="searchField"
+                           promptText="%toolbar.searchPrompt"
+                           prefWidth="200"/>
+                <Button text="%toolbar.find" onAction="#handleSearch"/>
             </ToolBar>
+
         </VBox>
     </top>
+
     <center>
         <SplitPane dividerPositions="0.25">
+
+            <!-- LEFT PANEL -->
             <VBox>
                 <padding>
                     <Insets top="10" right="10" bottom="10" left="10"/>
                 </padding>
+
                 <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Заметки" style="-fx-font-size: 14px; -fx-font-weight: bold;"/>
-                    <Label fx:id="notesCountLabel" text="Заметок: 0" style="-fx-text-fill: gray;"/>
+                    <Label text="%notes.title" style="-fx-font-weight: bold;"/>
+                    <Label fx:id="notesCountLabel"
+                           text="%notes.count"
+                           style="-fx-text-fill: gray;"/>
                 </HBox>
+
                 <TreeView fx:id="notesTreeView" VBox.vgrow="ALWAYS"/>
             </VBox>
+
+            <!-- RIGHT PANEL -->
             <StackPane>
-                <VBox fx:id="placeholderPane" alignment="CENTER" spacing="20" visible="true">
-                    <Label text="Выберите заметку или создайте новую" style="-fx-font-size: 16px; -fx-text-fill: gray;"/>
+
+                <!-- PLACEHOLDER -->
+                <VBox fx:id="placeholderPane"
+                      alignment="CENTER"
+                      spacing="20"
+                      visible="true">
+
+                    <Label text="%placeholder.text"
+                           style="-fx-text-fill: gray;"/>
+
                     <HBox spacing="10" alignment="CENTER">
-                        <Button text="+ Создать заметку" onAction="#handleNewNote" style="-fx-font-size: 14px;"/>
-                        <Button text="Ежедневная заметка" onAction="#handleDailyNote" style="-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white;"/>
+                        <Button text="%placeholder.newNote" onAction="#handleNewNote"/>
+                        <Button text="%placeholder.dailyNote" onAction="#handleDailyNote"/>
                     </HBox>
                 </VBox>
-                <TabPane fx:id="notesTabPane" visible="false" tabClosingPolicy="ALL_TABS"/>
+
+                <!-- TABS -->
+                <TabPane fx:id="notesTabPane"
+                         visible="false"
+                         tabClosingPolicy="ALL_TABS"/>
+
             </StackPane>
+
         </SplitPane>
     </center>
+
     <bottom>
-        <HBox spacing="10" alignment="CENTER_LEFT" style="-fx-padding: 5;">
-            <Label text="NoteGraph"/>
+        <HBox spacing="10"
+              alignment="CENTER_LEFT"
+              style="-fx-padding: 5;">
+
+            <Label text="%app.name"/>
+
             <Region HBox.hgrow="ALWAYS"/>
-            <Label fx:id="autoSaveLabel" text="✓ Сохранено" visible="false" style="-fx-text-fill: green;"/>
+
+            <Label fx:id="autoSaveLabel"
+                   text="%status.saved"
+                   visible="false"
+                   style="-fx-text-fill: green;"/>
         </HBox>
     </bottom>
+
 </BorderPane>

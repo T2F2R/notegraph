@@ -1,0 +1,29 @@
+.root {
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
+}
+
+/* Заголовки */
+.text-field {
+    -fx-font-size: 16px;
+}
+
+/* Текстовые области */
+.text-area {
+    -fx-font-size: 14px;
+}
+
+/* Кнопки */
+.button, .toggle-button {
+    -fx-font-size: 13px;
+}
+
+/* TreeView */
+.tree-cell {
+    -fx-font-size: 13px;
+}
+
+/* Labels */
+.label {
+    -fx-font-size: 13px;
+}
