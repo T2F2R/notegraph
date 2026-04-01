@@ -12,7 +12,6 @@
     <top>
         <VBox>
 
-            <!-- MENU -->
             <MenuBar>
                 <Menu text="%menu.file">
                     <MenuItem text="%file.newNote" onAction="#handleNewNote" accelerator="Ctrl+N"/>
@@ -42,7 +41,6 @@
                     <MenuItem text="%graph.open" onAction="#handleOpenGraph"/>
                 </Menu>
 
-                <!-- LANGUAGE SWITCH -->
                 <Menu text="%menu.language">
                     <MenuItem text="Русский" onAction="#switchToRussian"/>
                     <MenuItem text="English" onAction="#switchToEnglish"/>
@@ -61,6 +59,13 @@
                            promptText="%toolbar.searchPrompt"
                            prefWidth="200"/>
                 <Button text="%toolbar.find" onAction="#handleSearch"/>
+
+                <Separator orientation="VERTICAL"/>
+
+                <!-- 🔥 СОРТИРОВКА -->
+                <Label text="%toolbar.sort"/>
+                <ComboBox fx:id="sortComboBox" prefWidth="180"/>
+
             </ToolBar>
 
         </VBox>
@@ -69,7 +74,6 @@
     <center>
         <SplitPane dividerPositions="0.25">
 
-            <!-- LEFT PANEL -->
             <VBox>
                 <padding>
                     <Insets top="10" right="10" bottom="10" left="10"/>
@@ -85,10 +89,8 @@
                 <TreeView fx:id="notesTreeView" VBox.vgrow="ALWAYS"/>
             </VBox>
 
-            <!-- RIGHT PANEL -->
             <StackPane>
 
-                <!-- PLACEHOLDER -->
                 <VBox fx:id="placeholderPane"
                       alignment="CENTER"
                       spacing="20"
@@ -103,7 +105,6 @@
                     </HBox>
                 </VBox>
 
-                <!-- TABS -->
                 <TabPane fx:id="notesTabPane"
                          visible="false"
                          tabClosingPolicy="ALL_TABS"/>

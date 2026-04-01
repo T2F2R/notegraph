@@ -21,7 +21,6 @@ public class FontManager {
     private FontManager() {
         metadataManager = MetadataManager.getInstance();
 
-        // ===== ЗАГРУЗКА =====
         String savedFamily = metadataManager.getPreference(KEY_FONT_FAMILY, "System");
         String savedSizeStr = metadataManager.getPreference(KEY_FONT_SIZE, "14");
 
@@ -30,7 +29,6 @@ public class FontManager {
         fontFamily.set(savedFamily);
         fontSize.set(savedSize);
 
-        // ===== СОХРАНЕНИЕ =====
         fontFamily.addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !newVal.equals(oldVal)) {
                 metadataManager.setPreference(KEY_FONT_FAMILY, newVal);
@@ -48,8 +46,6 @@ public class FontManager {
         return INSTANCE;
     }
 
-    // ===== PROPERTIES =====
-
     public StringProperty fontFamilyProperty() {
         return fontFamily;
     }
@@ -57,8 +53,6 @@ public class FontManager {
     public DoubleProperty fontSizeProperty() {
         return fontSize;
     }
-
-    // ===== SETTERS =====
 
     public void setFontFamily(String family) {
         if (family != null && !family.isBlank()) {
@@ -72,7 +66,6 @@ public class FontManager {
         }
     }
 
-    // ===== GETTERS =====
 
     public String getCurrentFontFamily() {
         return fontFamily.get();
@@ -82,7 +75,6 @@ public class FontManager {
         return fontSize.get();
     }
 
-    // ===== FONT FACTORY =====
 
     public Font createFont() {
         return Font.font(getCurrentFontFamily(), getCurrentFontSize());
@@ -95,8 +87,6 @@ public class FontManager {
     public List<String> getAvailableFonts() {
         return Font.getFamilies();
     }
-
-    // ===== GLOBAL STYLE (ВАЖНО) =====
 
     public String getGlobalStyle() {
         return "-fx-font-family: '" + getCurrentFontFamily() + "';" +

@@ -1,0 +1,73 @@
+.root {
+    -fx-base: #2b2b2b;
+    -fx-background-color: #2b2b2b;
+    -fx-control-inner-background: #3c3f41;
+    -fx-text-fill: #e8e8e8;
+}
+
+.label {
+    -fx-text-fill: #e8e8e8;
+}
+
+.button {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: #e8e8e8;
+}
+
+.combo-box {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: #e8e8e8;
+}
+
+.combo-box .list-cell {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: #e8e8e8;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #3c3f41;
+}
+
+.spinner {
+    -fx-background-color: #3c3f41;
+}
+
+.text-field {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: #e8e8e8;
+}
+
+.dialog-pane {
+    -fx-background-color: #2b2b2b;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: #3c3f41;
+}
+
+.dialog-pane .content.label {
+    -fx-text-fill: #e8e8e8;
+}
+
+.note-dark {
+    -fx-background-color: #2b2b2b;
+}
+
+.note-light {
+    -fx-background-color: #ffffff;
+}
+
+.btn-active {
+    -fx-background-color: #4a90e2;
+    -fx-text-fill: white;
+}
+
+.btn-inactive {
+    -fx-background-color: #3c3f41;
+    -fx-text-fill: #cccccc;
+}
+
+.root {
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
+}

@@ -13,6 +13,7 @@ public class GraphInteractionController {
     private final GraphCamera camera;
     private final List<GraphNode> nodes;
     private final Consumer<String> onNodeClick;
+    private final Runnable onRedraw;
 
     private GraphNode draggedNode = null;
 
@@ -26,19 +27,20 @@ public class GraphInteractionController {
             Canvas canvas,
             GraphCamera camera,
             List<GraphNode> nodes,
-            Consumer<String> onNodeClick
+            Consumer<String> onNodeClick,
+            Runnable onRedraw
     ) {
         this.canvas = canvas;
         this.camera = camera;
         this.nodes = nodes;
         this.onNodeClick = onNodeClick;
+        this.onRedraw = onRedraw;
 
         init();
     }
 
     private void init() {
 
-        // --- НАЖАТИЕ ---
         canvas.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
 
             lastMouseX = e.getX();
@@ -55,7 +57,6 @@ public class GraphInteractionController {
             }
         });
 
-        // --- DRAG ---
         canvas.addEventHandler(MouseEvent.MOUSE_DRAGGED, e -> {
 
             double dx = e.getX() - lastMouseX;
@@ -65,9 +66,7 @@ public class GraphInteractionController {
                 wasDragging = true;
             }
 
-            // двигаем узел
             if (draggedNode != null) {
-
                 double worldX = camera.screenToWorldX(e.getX());
                 double worldY = camera.screenToWorldY(e.getY());
 
@@ -76,19 +75,21 @@ public class GraphInteractionController {
 
                 draggedNode.vx = 0;
                 draggedNode.vy = 0;
+
+                onRedraw.run();
             }
 
-            // двигаем камеру
             else if (draggingCamera) {
                 camera.x += dx;
                 camera.y += dy;
+
+                onRedraw.run();
             }
 
             lastMouseX = e.getX();
             lastMouseY = e.getY();
         });
 
-        // --- ОТПУСТИЛ ---
         canvas.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
 
             if (draggedNode != null) {
@@ -97,9 +98,10 @@ public class GraphInteractionController {
             }
 
             draggingCamera = false;
+
+            onRedraw.run();
         });
 
-        // --- КЛИК ---
         canvas.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
 
             if (wasDragging) return;
@@ -111,7 +113,6 @@ public class GraphInteractionController {
             }
         });
 
-        // --- ЗУМ КОЛЕСИКОМ ---
         canvas.addEventHandler(ScrollEvent.SCROLL, e -> {
 
             double delta = e.getDeltaY();
@@ -123,6 +124,8 @@ public class GraphInteractionController {
             }
 
             camera.zoom = Math.max(0.1, Math.min(5.0, camera.zoom));
+
+            onRedraw.run();
 
             e.consume();
         });

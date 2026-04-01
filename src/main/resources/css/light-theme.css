@@ -1,0 +1,15 @@
+.root {
+    -fx-base: #ffffff;
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-text-fill: #000000;
+}
+
+.label {
+    -fx-text-fill: #000000;
+}
+
+.root {
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
+}
