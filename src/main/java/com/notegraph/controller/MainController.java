@@ -149,7 +149,6 @@ public class MainController {
 
         ThemeManager themeManager = ThemeManager.getInstance();
 
-        // ===== CSS (базовый) =====
         var css = getClass().getResource("/css/app.css");
         if (css != null) {
             rootPane.getStylesheets().add(css.toExternalForm());
@@ -157,20 +156,17 @@ public class MainController {
             logger.warn("app.css не найден");
         }
 
-        // ===== ПРИМЕНЕНИЕ ТЕМЫ (когда Scene готова) =====
         Platform.runLater(() -> {
             applyTheme(themeManager.getCurrentTheme());
             applyGlobalFont();
-            refreshAllUI(); // 🔥 важно (WebView + Graph)
+            refreshAllUI();
         });
 
-        // ===== СМЕНА ТЕМЫ =====
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyTheme(newTheme);
             refreshAllUI();
         });
 
-        // ===== СМЕНА ШРИФТА =====
         fontManager.fontFamilyProperty().addListener((obs, oldVal, newVal) -> {
             applyGlobalFont();
             refreshAllUI();
@@ -348,7 +344,6 @@ public class MainController {
 
     public void openGraphTab() {
 
-        // 🔥 если уже открыт — просто переключаемся
         if (graphTab != null && notesTabPane.getTabs().contains(graphTab)) {
             notesTabPane.getSelectionModel().select(graphTab);
             return;
@@ -357,7 +352,6 @@ public class MainController {
         Canvas canvas = new Canvas();
         StackPane container = new StackPane(canvas);
 
-        // авто-ресайз
         canvas.widthProperty().bind(container.widthProperty());
         canvas.heightProperty().bind(container.heightProperty());
 
@@ -369,11 +363,9 @@ public class MainController {
 
         graphRenderer = new GraphRendererCanvas(canvas, camera);
 
-        // ===== тема сразу =====
         graphRenderer.setTheme(themeManager.getCurrentTheme());
         graphRenderer.render(graphData.nodes, graphData.edges);
 
-        // ===== смена темы =====
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             if (graphRenderer != null) {
                 graphRenderer.setTheme(newTheme);
@@ -381,7 +373,6 @@ public class MainController {
             }
         });
 
-        // ===== interaction =====
         new GraphInteractionController(
                 canvas,
                 camera,
@@ -397,7 +388,6 @@ public class MainController {
                 }
         );
 
-        // ===== loop =====
         graphTimer = new AnimationTimer() {
             @Override
             public void handle(long now) {
@@ -408,7 +398,6 @@ public class MainController {
 
         graphTimer.start();
 
-        // ===== tab =====
         graphTab = new Tab("Graph");
         graphTab.setContent(container);
 
@@ -627,7 +616,6 @@ public class MainController {
                 deleteNoteItem
         );
 
-        // ===== ДИНАМИКА (видимость + текст) =====
         contextMenu.setOnShowing(event -> {
             TreeItem<Path> selected = notesTreeView.getSelectionModel().getSelectedItem();
 
@@ -635,7 +623,6 @@ public class MainController {
             boolean isNote = selected != null && selected.getValue() != null && fsManager.isNote(selected.getValue());
             boolean isRoot = selected != null && selected.getValue() != null && selected.getValue().equals(fsManager.getVaultPath());
 
-            // 🔥 ВАЖНО: обновляем LanguageManager каждый раз
             LanguageManager lmNow = LanguageManager.getInstance();
 
             if (isNote) {
@@ -662,7 +649,6 @@ public class MainController {
             deleteNoteItem.setVisible(isNote);
         });
 
-        // ===== 🔥 ОБНОВЛЕНИЕ ЯЗЫКА НА ЛЕТУ =====
         LanguageManager.getInstance().localeProperty().addListener((obs, oldVal, newVal) -> {
             LanguageManager lmNew = LanguageManager.getInstance();
 
@@ -816,7 +802,6 @@ public class MainController {
 
         logger.info("openNoteInTab: '{}'", note.getTitle());
 
-        // ===== если уже открыт =====
         if (openTabs.containsKey(note.getPath())) {
 
             Tab existingTab = openTabs.get(note.getPath());
@@ -829,20 +814,16 @@ public class MainController {
             }
         }
 
-        // ===== создаем Tab =====
         Tab tab = new Tab(note.getTitle());
 
-        // ===== создаем контент =====
         NoteTabContent content = createTabContent(note);
 
         tab.setContent(content.container);
 
-        // 🔥 ВАЖНО: сохраняем content внутри tab
         tab.setUserData(content);
 
         final Path notePath = note.getPath();
 
-        // ===== закрытие =====
         tab.setOnClosed(e -> {
 
             logger.debug("Закрытие вкладки '{}'", note.getTitle());
@@ -863,10 +844,8 @@ public class MainController {
             openTabs.remove(notePath);
         });
 
-        // ===== сохраняем =====
         openTabs.put(note.getPath(), tab);
 
-        // ===== добавляем =====
         int index = notesTabPane.getTabs().size() - 1;
         notesTabPane.getTabs().add(index, tab);
 
@@ -1064,45 +1043,6 @@ public class MainController {
                 content.contentTextArea.getText()
         );
         content.webView.getEngine().loadContent(html);
-    }
-
-    private void renameNoteFile(NoteTabContent c, String newTitle) {
-        if (c == null || c.note == null) return;
-
-        String old = c.note.getTitle();
-        Optional<Note> ex = noteService.getNoteByTitle(newTitle);
-        if (ex.isPresent() && !ex.get().getPath().equals(c.note.getPath())) {
-            showError("Error", "A note with this title already exists.");
-            c.titleField.setText(old);
-            return;
-        }
-
-        try {
-            Path oldPath = c.note.getPath();
-            Note renamed = noteService.renameNote(c.note, newTitle);
-
-            c.note = renamed;
-
-            Tab tab = openTabs.remove(oldPath);
-            if (tab != null) {
-                openTabs.put(renamed.getPath(), tab);
-                tab.setText(newTitle);
-
-                tab.setOnClosed(e -> {
-                    saveNoteContent(c);
-                    openTabs.remove(renamed.getPath());
-                    logger.debug("Вкладка закрыта после переименования: {}", newTitle);
-                });
-            }
-
-            refreshTree();
-            showAutoSaveIndicator();
-            logger.info("Файл переименован: {} -> {}", old, newTitle);
-        } catch (Exception e) {
-            logger.error("Ошибка переименования", e);
-            showError("Error", e.getMessage());
-            c.titleField.setText(old);
-        }
     }
 
     private void saveNoteContent(NoteTabContent content) {
