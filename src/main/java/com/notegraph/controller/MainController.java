@@ -9,6 +9,8 @@ import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
 import com.notegraph.util.MetadataManager;
 
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -423,6 +425,20 @@ public class MainController {
         }
     }
 
+    private ImageView icon(String name) {
+        var stream = getClass().getResourceAsStream("/icons/" + name);
+        if (stream == null) {
+            System.out.println("Иконка не найдена: " + name);
+            return null;
+        }
+
+        Image img = new Image(stream);
+        ImageView iv = new ImageView(img);
+        iv.setFitWidth(16);
+        iv.setFitHeight(16);
+        return iv;
+    }
+
     private void setupTreeView() {
         Path vaultPath = fsManager.getVaultPath();
         TreeItem<Path> root = new TreeItem<>(vaultPath);
@@ -437,28 +453,40 @@ public class MainController {
             @Override
             protected void updateItem(Path path, boolean empty) {
                 super.updateItem(path, empty);
+
                 if (empty || path == null) {
                     setText(null);
                     setGraphic(null);
-                } else {
-                    if (Files.isDirectory(path)) {
-                        if (path.equals(fsManager.getVaultPath())) {
-                            setText("📚 " + path.getFileName().toString());
-                        } else {
-                            setText(path.getFileName().toString());
-                        }
-                        setStyle("-fx-font-weight: bold;");
-                    } else if (fsManager.isNote(path)) {
-                        String fileName = path.getFileName().toString();
-                        String name = fileName.replaceAll("\\.md$", "");
+                    return;
+                }
 
-                        String relativePath = fsManager.getVaultPath().relativize(path).toString();
-                        boolean bookmarked = metadataManager.isBookmarked(relativePath);
+                if (Files.isDirectory(path)) {
 
-                        setText((bookmarked ? "★ " : "") + name);
-                        setStyle("-fx-font-weight: normal;");
+                    setText(path.getFileName().toString());
+                    setStyle("-fx-font-weight: bold;");
+
+                    if (path.equals(fsManager.getVaultPath())) {
+                        setGraphic(icon("root-folder.png")); // root
+                    } else {
+                        setGraphic(icon("folder.png"));
                     }
-                    setGraphic(null);
+
+                } else if (fsManager.isNote(path)) {
+
+                    String fileName = path.getFileName().toString();
+                    String name = fileName.replaceAll("\\.md$", "");
+
+                    String relativePath = fsManager.getVaultPath().relativize(path).toString();
+                    boolean bookmarked = metadataManager.isBookmarked(relativePath);
+
+                    setText(name);
+                    setStyle("-fx-font-weight: normal;");
+
+                    if (bookmarked) {
+                        setGraphic(icon("star.png"));
+                    } else {
+                        setGraphic(icon("note.png"));
+                    }
                 }
             }
         });
@@ -669,7 +697,7 @@ public class MainController {
         try {
             Note note = noteService.getNoteByPath(notePath);
             if (note == null) {
-                showError("%error.error", "Failed to load note");
+                showError("Error", "Failed to load note");
                 return;
             }
 
@@ -679,7 +707,7 @@ public class MainController {
 
         } catch (Exception e) {
             logger.error("Ошибка при открытии заметки", e);
-            showError("%error.error", e.getMessage());
+            showError("Error", e.getMessage());
         }
     }
 
@@ -887,25 +915,52 @@ public class MainController {
 
     private NoteTabContent createTabContent(Note note) {
         LanguageManager lm = LanguageManager.getInstance();
+
         NoteTabContent content = new NoteTabContent();
         content.note = note;
+
         content.container = new VBox(10);
         content.container.setPadding(new Insets(10));
 
         HBox toolbar = new HBox(10);
         toolbar.setPadding(new Insets(5));
 
-        content.editModeButton = new ToggleButton(lm.get("button.edit"));
-        content.previewModeButton = new ToggleButton(lm.get("button.view"));
+        // 🔹 КНОПКИ БЕЗ ТЕКСТА (ИКОНКИ)
+        content.editModeButton = new ToggleButton();
+        content.previewModeButton = new ToggleButton();
+
+        // 🔹 Tooltip (локализация)
+        content.editModeButton.setTooltip(new Tooltip(lm.get("button.edit")));
+        content.previewModeButton.setTooltip(new Tooltip(lm.get("button.view")));
+
+        // 🔹 Иконка редактирования
+        ImageView editIcon = new ImageView(
+                new Image(getClass().getResourceAsStream("/icons/edit.png"))
+        );
+        editIcon.setFitWidth(16);
+        editIcon.setFitHeight(16);
+        content.editModeButton.setGraphic(editIcon);
+
+        // 🔹 Иконка просмотра
+        ImageView previewIcon = new ImageView(
+                new Image(getClass().getResourceAsStream("/icons/preview.png"))
+        );
+        previewIcon.setFitWidth(16);
+        previewIcon.setFitHeight(16);
+        content.previewModeButton.setGraphic(previewIcon);
+
         content.editModeButton.setSelected(true);
 
+        // 🔹 ToggleGroup
         ToggleGroup group = new ToggleGroup();
         content.editModeButton.setToggleGroup(group);
         content.previewModeButton.setToggleGroup(group);
 
+        // 🔹 Обработчики
         content.editModeButton.setOnAction(e -> switchToEditMode(content));
         content.previewModeButton.setOnAction(e -> switchToPreviewMode(content));
 
+        // 🔹 Стили активных кнопок
         content.editModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
             updateToggleButtonsStyle(content);
         });
@@ -916,21 +971,27 @@ public class MainController {
 
         toolbar.getChildren().addAll(content.editModeButton, content.previewModeButton);
 
+        // 🔹 ОБЛАСТЬ РЕДАКТИРОВАНИЯ
         content.editArea = new VBox(5);
+
         content.titleField = new TextField(note.getTitle());
+
         content.contentTextArea = new TextArea(note.getBodyContent());
         content.contentTextArea.setWrapText(true);
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
 
+        // 🔹 ПРЕДПРОСМОТР (WebView)
         content.webView = new WebView();
         content.webView.getEngine().setJavaScriptEnabled(true);
+
         content.previewScrollPane = new ScrollPane(content.webView);
         content.previewScrollPane.setFitToWidth(true);
         content.previewScrollPane.setVisible(false);
         content.previewScrollPane.setManaged(false);
 
+        // 🔹 JS Bridge
         content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
@@ -943,6 +1004,7 @@ public class MainController {
             }
         });
 
+        // 🔹 Смена темы
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyThemeToNoteContent(content, newTheme);
             updateToggleButtonsStyle(content);
@@ -952,15 +1014,18 @@ public class MainController {
             }
         });
 
+        // 🔹 Шрифты
         fontManager.fontFamilyProperty().addListener((obs, o, n) -> applyFontToContent(content));
         fontManager.fontSizeProperty().addListener((obs, o, n) -> applyFontToContent(content));
 
+        // 🔹 Сборка UI
         content.container.getChildren().addAll(
                 toolbar,
                 content.editArea,
                 content.previewScrollPane
         );
 
+        // 🔹 Инициализация
         applyThemeToNoteContent(content, themeManager.getCurrentTheme());
         applyFontToContent(content);
         updateToggleButtonsStyle(content);

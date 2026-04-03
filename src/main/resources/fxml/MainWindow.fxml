@@ -2,6 +2,8 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.image.Image?>
 <BorderPane xmlns="http://javafx.com/javafx"
             xmlns:fx="http://javafx.com/fxml"
             fx:id="rootPane"
@@ -48,22 +50,71 @@
             </MenuBar>
 
             <ToolBar>
-                <Button text="%toolbar.newNote" onAction="#handleNewNote"/>
-                <Button text="%toolbar.today" onAction="#handleDailyNote"/>
-                <Button text="%toolbar.openFolder" onAction="#handleOpenNotesFolder"/>
+
+                <Button onAction="#handleNewNote">
+                    <tooltip>
+                        <Tooltip text="%toolbar.newNote"/>
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16">
+                            <image>
+                                <Image url="@/icons/new-note.png"/>
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
+
+                <Button onAction="#handleDailyNote">
+                    <tooltip>
+                        <Tooltip text="%toolbar.today"/>
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16">
+                            <image>
+                                <Image url="@/icons/today.png"/>
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
+
+                <Button onAction="#handleOpenNotesFolder">
+                    <tooltip>
+                        <Tooltip text="%toolbar.openFolder"/>
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16">
+                            <image>
+                                <Image url="@/icons/root-folder.png"/>
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
 
                 <Separator orientation="VERTICAL"/>
 
                 <Label text="%toolbar.search"/>
+
                 <TextField fx:id="searchField"
                            promptText="%toolbar.searchPrompt"
                            prefWidth="200"/>
-                <Button text="%toolbar.find" onAction="#handleSearch"/>
+
+                <Button onAction="#handleSearch">
+                    <tooltip>
+                        <Tooltip text="%toolbar.find"/>
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16">
+                            <image>
+                                <Image url="@/icons/search.png"/>
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
 
                 <Separator orientation="VERTICAL"/>
 
-                <!-- 🔥 СОРТИРОВКА -->
                 <Label text="%toolbar.sort"/>
+
                 <ComboBox fx:id="sortComboBox" prefWidth="180"/>
 
             </ToolBar>
