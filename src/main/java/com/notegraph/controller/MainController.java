@@ -137,9 +137,9 @@ public class MainController {
     public void initialize() {
         logger.info("Инициализация MainController");
 
+        setupSorting();
         setupTreeView();
         setupSearch();
-        setupSorting();
         setupAutoSave();
         setupTabPaneListener();
         createPlusTab();
@@ -234,7 +234,7 @@ public class MainController {
             } catch (Exception e) {
                 logger.error("Ошибка открытия папки", e);
                 javafx.application.Platform.runLater(() -> {
-                    showError("%error.error", "=Failed to open folder: " + e.getMessage());
+                    showError("Error", "Failed to open folder: " + e.getMessage());
                 });
             }
         }).start();
@@ -578,12 +578,58 @@ public class MainController {
         try {
             List<Path> children = fsManager.getChildren(directory);
 
+            String sortKey = sortComboBox != null
+                    ? sortComboBox.getSelectionModel().getSelectedItem()
+                    : "sort.byNameAZ";
+
             children.sort((a, b) -> {
+
                 boolean aIsDir = Files.isDirectory(a);
                 boolean bIsDir = Files.isDirectory(b);
+
                 if (aIsDir && !bIsDir) return -1;
                 if (!aIsDir && bIsDir) return 1;
-                return a.getFileName().toString().compareToIgnoreCase(b.getFileName().toString());
+
+                switch (sortKey) {
+
+                    case "sort.byNameZA":
+                        return b.getFileName().toString()
+                                .compareToIgnoreCase(a.getFileName().toString());
+
+                    case "sort.byDateModified1":
+                        try {
+                            return Files.getLastModifiedTime(b)
+                                    .compareTo(Files.getLastModifiedTime(a));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+
+                    case "sort.byDateModified2":
+                        try {
+                            return Files.getLastModifiedTime(a)
+                                    .compareTo(Files.getLastModifiedTime(b));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+
+                    case "sort.byBookmarks":
+                        String relA = fsManager.getVaultPath().relativize(a).toString();
+                        String relB = fsManager.getVaultPath().relativize(b).toString();
+
+                        boolean aBookmarked = metadataManager.isBookmarked(relA);
+                        boolean bBookmarked = metadataManager.isBookmarked(relB);
+
+                        if (aBookmarked && !bBookmarked) return -1;
+                        if (!aBookmarked && bBookmarked) return 1;
+
+                        return a.getFileName().toString()
+                                .compareToIgnoreCase(b.getFileName().toString());
+
+                    case "sort.byNameAZ":
+                    default:
+                        return a.getFileName().toString()
+                                .compareToIgnoreCase(b.getFileName().toString());
+                }
             });
 
             for (Path child : children) {
@@ -594,6 +640,7 @@ public class MainController {
                     buildFileTree(child, item);
                 }
             }
+
         } catch (IOException e) {
             logger.error("Ошибка при построении дерева", e);
         }
@@ -925,15 +972,12 @@ public class MainController {
         HBox toolbar = new HBox(10);
         toolbar.setPadding(new Insets(5));
 
-        // 🔹 КНОПКИ БЕЗ ТЕКСТА (ИКОНКИ)
         content.editModeButton = new ToggleButton();
         content.previewModeButton = new ToggleButton();
 
-        // 🔹 Tooltip (локализация)
         content.editModeButton.setTooltip(new Tooltip(lm.get("button.edit")));
         content.previewModeButton.setTooltip(new Tooltip(lm.get("button.view")));
 
-        // 🔹 Иконка редактирования
         ImageView editIcon = new ImageView(
                 new Image(getClass().getResourceAsStream("/icons/edit.png"))
         );
@@ -941,7 +985,6 @@ public class MainController {
         editIcon.setFitHeight(16);
         content.editModeButton.setGraphic(editIcon);
 
-        // 🔹 Иконка просмотра
         ImageView previewIcon = new ImageView(
                 new Image(getClass().getResourceAsStream("/icons/preview.png"))
         );
@@ -951,16 +994,13 @@ public class MainController {
 
         content.editModeButton.setSelected(true);
 
-        // 🔹 ToggleGroup
         ToggleGroup group = new ToggleGroup();
         content.editModeButton.setToggleGroup(group);
         content.previewModeButton.setToggleGroup(group);
 
-        // 🔹 Обработчики
         content.editModeButton.setOnAction(e -> switchToEditMode(content));
         content.previewModeButton.setOnAction(e -> switchToPreviewMode(content));
 
-        // 🔹 Стили активных кнопок
         content.editModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
             updateToggleButtonsStyle(content);
         });
@@ -971,7 +1011,6 @@ public class MainController {
 
         toolbar.getChildren().addAll(content.editModeButton, content.previewModeButton);
 
-        // 🔹 ОБЛАСТЬ РЕДАКТИРОВАНИЯ
         content.editArea = new VBox(5);
 
         content.titleField = new TextField(note.getTitle());
@@ -982,7 +1021,6 @@ public class MainController {
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
 
-        // 🔹 ПРЕДПРОСМОТР (WebView)
         content.webView = new WebView();
         content.webView.getEngine().setJavaScriptEnabled(true);
 
@@ -991,7 +1029,6 @@ public class MainController {
         content.previewScrollPane.setVisible(false);
         content.previewScrollPane.setManaged(false);
 
-        // 🔹 JS Bridge
         content.webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == javafx.concurrent.Worker.State.SUCCEEDED) {
                 try {
@@ -1004,7 +1041,6 @@ public class MainController {
             }
         });
 
-        // 🔹 Смена темы
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyThemeToNoteContent(content, newTheme);
             updateToggleButtonsStyle(content);
@@ -1014,18 +1050,15 @@ public class MainController {
             }
         });
 
-        // 🔹 Шрифты
         fontManager.fontFamilyProperty().addListener((obs, o, n) -> applyFontToContent(content));
         fontManager.fontSizeProperty().addListener((obs, o, n) -> applyFontToContent(content));
 
-        // 🔹 Сборка UI
         content.container.getChildren().addAll(
                 toolbar,
                 content.editArea,
                 content.previewScrollPane
         );
 
-        // 🔹 Инициализация
         applyThemeToNoteContent(content, themeManager.getCurrentTheme());
         applyFontToContent(content);
         updateToggleButtonsStyle(content);
@@ -1256,7 +1289,8 @@ public class MainController {
                     "sort.byDateModified1",
                     "sort.byDateModified2",
                     "sort.byNameAZ",
-                    "sort.byNameZA"
+                    "sort.byNameZA",
+                    "sort.byBookmarks"
             );
 
             sortComboBox.setItems(keys);
@@ -1264,6 +1298,7 @@ public class MainController {
             updateSortComboBoxTexts();
 
             sortComboBox.getSelectionModel().select(0);
+
             sortComboBox.setOnAction(e -> refreshTree());
 
             LanguageManager.getInstance().localeProperty().addListener((obs, oldVal, newVal) -> {
