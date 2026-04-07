@@ -12,19 +12,18 @@ import java.util.regex.Pattern;
  * Заметка = .md файл с YAML frontmatter и markdown содержимым.
  */
 public class Note {
-    private Path path;                    // Путь к файлу
-    private String title;                 // Заголовок из frontmatter или имени файла
-    private String content;               // Полное содержимое файла
-    private String bodyContent;           // Содержимое без frontmatter
-    private Map<String, Object> frontmatter; // YAML frontmatter
+    private Path path;
+    private String title;
+    private String content;
+    private String bodyContent;
+    private Map<String, Object> frontmatter;
     private LocalDateTime created;
     private LocalDateTime modified;
     private List<String> tags;
     private boolean bookmarked;
-    private List<String> outgoingLinks;   // Ссылки на другие заметки [[link]]
-    private List<String> incomingLinks;   // Обратные ссылки (backlinks)
-    
-    // Для обратной совместимости со старым кодом
+    private List<String> outgoingLinks;
+    private List<String> incomingLinks;
+
     private Integer legacyId;
     
     /**
@@ -47,7 +46,6 @@ public class Note {
      */
     @Deprecated
     public Note(String title, String content) {
-        // Создаем временный путь на основе заголовка
         this.title = title;
         this.bodyContent = content;
         this.content = content;
@@ -58,8 +56,7 @@ public class Note {
         this.bookmarked = false;
         this.created = LocalDateTime.now();
         this.modified = LocalDateTime.now();
-        
-        // Устанавливаем временный путь (будет заменен при сохранении)
+
         this.path = null;
     }
     
@@ -78,8 +75,7 @@ public class Note {
         this.modified = LocalDateTime.now();
         this.path = null;
     }
-    
-    // Getters and Setters
+
     
     public Path getPath() {
         return path;
@@ -92,7 +88,6 @@ public class Note {
     public String getTitle() {
         if (title == null || title.isEmpty()) {
             if (path != null && path.getFileName() != null) {
-                // Используем имя файла без расширения
                 String fileName = path.getFileName().toString();
                 return fileName.replaceAll("\\.md$", "");
             }
@@ -151,23 +146,7 @@ public class Note {
     public void setModified(LocalDateTime modified) {
         this.modified = modified;
     }
-    
-    // Для обратной совместимости
-    public LocalDateTime getCreatedAt() {
-        return created;
-    }
-    
-    public void setCreatedAt(LocalDateTime created) {
-        this.created = created;
-    }
-    
-    public LocalDateTime getUpdatedAt() {
-        return modified;
-    }
-    
-    public void setUpdatedAt(LocalDateTime modified) {
-        this.modified = modified;
-    }
+
     
     public List<String> getTags() {
         return tags;
@@ -177,28 +156,12 @@ public class Note {
         this.tags = tags;
     }
     
-    public boolean isBookmarked() {
-        return bookmarked;
-    }
-    
     public void setBookmarked(boolean bookmarked) {
         this.bookmarked = bookmarked;
     }
     
     public List<String> getOutgoingLinks() {
         return outgoingLinks;
-    }
-    
-    public void setOutgoingLinks(List<String> outgoingLinks) {
-        this.outgoingLinks = outgoingLinks;
-    }
-    
-    public List<String> getIncomingLinks() {
-        return incomingLinks;
-    }
-    
-    public void setIncomingLinks(List<String> incomingLinks) {
-        this.incomingLinks = incomingLinks;
     }
     
     /**
@@ -252,37 +215,6 @@ public class Note {
      */
     @Deprecated
     public void setFolderId(Integer folderId) {
-        // Игнорируется - перемещение через FileSystemManager
-    }
-    
-    /**
-     * Получить относительный путь от vault
-     */
-    public Path getRelativePath(Path vaultPath) {
-        if (path == null || vaultPath == null) {
-            return null;
-        }
-        return vaultPath.relativize(path);
-    }
-    
-    /**
-     * Получить имя файла
-     */
-    public String getFileName() {
-        if (path == null) {
-            return title != null ? title + ".md" : "";
-        }
-        return path.getFileName().toString();
-    }
-    
-    /**
-     * Получить родительскую папку
-     */
-    public Path getParentFolder() {
-        if (path == null) {
-            return null;
-        }
-        return path.getParent();
     }
     
     /**
@@ -300,7 +232,6 @@ public class Note {
         
         while (matcher.find()) {
             String link = matcher.group(1);
-            // Поддержка ссылок с алиасами: [[note|alias]] -> берем только note
             if (link.contains("|")) {
                 link = link.split("\\|")[0];
             }
@@ -308,25 +239,6 @@ public class Note {
                 outgoingLinks.add(link.trim());
             }
         }
-    }
-    
-    /**
-     * Проверить, содержит ли заметка ссылку на другую заметку
-     */
-    public boolean hasLinkTo(String noteTitle) {
-        return outgoingLinks.contains(noteTitle);
-    }
-    
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Note note = (Note) o;
-        if (path != null && note.path != null) {
-            return Objects.equals(path, note.path);
-        }
-        // Для обратной совместимости - по title
-        return Objects.equals(title, note.title);
     }
     
     @Override

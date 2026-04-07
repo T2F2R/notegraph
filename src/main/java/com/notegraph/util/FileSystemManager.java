@@ -83,6 +83,10 @@ public class FileSystemManager {
         return vaultPath;
     }
 
+
+    public Path getNotePath(String title) {
+        return getVaultPath().resolve(title + ".md");
+    }
     /**
      * Получить путь к директории метаданных
      */
@@ -131,18 +135,6 @@ public class FileSystemManager {
                 .filter(this::isNote)
                 .forEach(notes::add);
         return notes;
-    }
-
-    /**
-     * Получить все папки в vault рекурсивно
-     */
-    public List<Path> getAllFolders() throws IOException {
-        List<Path> folders = new ArrayList<>();
-        Files.walk(vaultPath)
-                .filter(this::isFolder)
-                .filter(p -> !p.equals(vaultPath)) // Исключаем корневую директорию
-                .forEach(folders::add);
-        return folders;
     }
 
     /**
@@ -289,15 +281,4 @@ public class FileSystemManager {
         return name.replaceAll("[\\\\/:*?\"<>|]", "").trim();
     }
 
-    /**
-     * Генерировать YAML frontmatter для заметки
-     */
-    private String generateFrontmatter(String title) {
-        return "---\n" +
-                "title: \"" + title + "\"\n" +
-                "created: " + LocalDateTime.now() + "\n" +
-                "modified: " + LocalDateTime.now() + "\n" +
-                "tags: []\n" +
-                "---";
-    }
 }

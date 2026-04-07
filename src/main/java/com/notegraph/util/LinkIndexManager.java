@@ -165,70 +165,7 @@ public class LinkIndexManager {
     public Set<String> getBacklinks(String noteTitle) {
         return new HashSet<>(backlinksIndex.getOrDefault(noteTitle, new HashSet<>()));
     }
-    
-    /**
-     * Получить исходящие ссылки для заметки
-     */
-    public Set<String> getOutgoingLinks(String noteTitle) {
-        return new HashSet<>(outgoingLinksIndex.getOrDefault(noteTitle, new HashSet<>()));
-    }
-    
-    /**
-     * Переиндексировать все заметки
-     */
-    public void rebuildIndex(List<Note> allNotes) {
-        logger.info("Начало переиндексации связей...");
-        
-        backlinksIndex.clear();
-        outgoingLinksIndex.clear();
-        
-        for (Note note : allNotes) {
-            String noteTitle = note.getTitle();
-            Set<String> outgoingLinks = new HashSet<>(note.getOutgoingLinks());
-            
-            outgoingLinksIndex.put(noteTitle, outgoingLinks);
 
-            for (String targetTitle : outgoingLinks) {
-                Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
-                backlinks.add(noteTitle);
-                backlinksIndex.put(targetTitle, backlinks);
-            }
-        }
-        
-        saveIndex();
-        logger.info("Переиндексация завершена. Всего заметок: {}, связей: {}", 
-            allNotes.size(), outgoingLinksIndex.size());
-    }
-    
-    /**
-     * Получить статистику связей
-     */
-    public Map<String, Integer> getStatistics() {
-        Map<String, Integer> stats = new HashMap<>();
-        stats.put("total_notes_with_links", outgoingLinksIndex.size());
-        stats.put("total_notes_with_backlinks", backlinksIndex.size());
-        
-        int totalOutgoingLinks = 0;
-        for (Set<String> links : outgoingLinksIndex.values()) {
-            totalOutgoingLinks += links.size();
-        }
-        stats.put("total_outgoing_links", totalOutgoingLinks);
-        
-        int totalBacklinks = 0;
-        for (Set<String> backlinks : backlinksIndex.values()) {
-            totalBacklinks += backlinks.size();
-        }
-        stats.put("total_backlinks", totalBacklinks);
-        
-        return stats;
-    }
-    
-    /**
-     * Перезагрузить индекс из файла
-     */
-    public void reload() {
-        loadIndex();
-    }
 
     public Map<String, Set<String>> getGraph() {
         Map<String, Set<String>> copy = new HashMap<>();
@@ -236,5 +173,39 @@ public class LinkIndexManager {
             copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
         return copy;
+    }
+
+    public void renameNote(String oldTitle, String newTitle) {
+        if (oldTitle.equals(newTitle)) return;
+
+        // --- outgoing ---
+        Set<String> outgoing = outgoingLinksIndex.remove(oldTitle);
+        if (outgoing != null) {
+            outgoingLinksIndex.put(newTitle, outgoing);
+        }
+
+        // --- backlinks ---
+        Set<String> backlinks = backlinksIndex.remove(oldTitle);
+        if (backlinks != null) {
+            backlinksIndex.put(newTitle, backlinks);
+        }
+
+        // --- обновляем ссылки у других заметок ---
+        for (Map.Entry<String, Set<String>> entry : outgoingLinksIndex.entrySet()) {
+            Set<String> links = entry.getValue();
+            if (links.remove(oldTitle)) {
+                links.add(newTitle);
+            }
+        }
+
+        for (Map.Entry<String, Set<String>> entry : backlinksIndex.entrySet()) {
+            Set<String> links = entry.getValue();
+            if (links.remove(oldTitle)) {
+                links.add(newTitle);
+            }
+        }
+
+        saveIndex();
+        logger.debug("Переименование заметки: {} -> {}", oldTitle, newTitle);
     }
 }

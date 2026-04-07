@@ -13,7 +13,20 @@
 
     <top>
         <VBox>
+            <HBox fx:id="titleBar"
+                  style="-fx-background-color: -fx-background;"
+                  alignment="CENTER_LEFT"
+                  spacing="10"
+                  prefHeight="30">
 
+                <Label text="NoteGraph" />
+
+                <Pane HBox.hgrow="ALWAYS"/>
+
+                <Button text="—" onAction="#handleMinimize"/>
+                <Button text="□" onAction="#handleMaximize"/>
+                <Button text="X" onAction="#handleClose"/>
+            </HBox>
             <MenuBar>
                 <Menu text="%menu.file">
                     <MenuItem text="%file.newNote" onAction="#handleNewNote" accelerator="Ctrl+N"/>

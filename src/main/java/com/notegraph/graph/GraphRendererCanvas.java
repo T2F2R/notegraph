@@ -14,7 +14,6 @@ public class GraphRendererCanvas {
 
     private Theme theme = Theme.DARK;
 
-    // Кешируем последний список для перерисовки
     private List<GraphNode> lastNodes;
     private List<GraphEdge> lastEdges;
 
@@ -29,7 +28,6 @@ public class GraphRendererCanvas {
         this.theme = theme;
         System.out.println("GraphRendererCanvas.setTheme вызван: " + (theme == Theme.DARK ? "DARK" : "LIGHT"));
 
-        // ПРИНУДИТЕЛЬНАЯ ПЕРЕРИСОВКА с новой темой
         if (lastNodes != null && lastEdges != null) {
             System.out.println("GraphRendererCanvas: принудительная перерисовка");
             render(lastNodes, lastEdges);
@@ -37,11 +35,9 @@ public class GraphRendererCanvas {
     }
 
     public void render(List<GraphNode> nodes, List<GraphEdge> edges) {
-        // Сохраняем для перерисовки при смене темы
         this.lastNodes = nodes;
         this.lastEdges = edges;
 
-        // Фон - используем тему!
         g.setFill(theme.background);
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
@@ -69,7 +65,6 @@ public class GraphRendererCanvas {
             double y = camera.worldToScreenY(n.y);
             double radius = 5 * camera.zoom;
 
-            // Цвет узла из темы
             if (n.selected) {
                 g.setFill(theme.nodeColorSelected);
             } else if (n.hovered) {
@@ -80,12 +75,10 @@ public class GraphRendererCanvas {
 
             g.fillOval(x - radius, y - radius, radius * 2, radius * 2);
 
-            // Обводка
             g.setStroke(theme.nodeBorder);
             g.setLineWidth(1.5);
             g.strokeOval(x - radius, y - radius, radius * 2, radius * 2);
 
-            // Текст
             if (n.hovered || camera.zoom > 1.5) {
                 g.setFill(theme.text);
                 g.fillText(n.id, x + radius + 5, y + 4);

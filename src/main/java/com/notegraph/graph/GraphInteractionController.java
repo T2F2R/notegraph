@@ -40,9 +40,7 @@ public class GraphInteractionController {
     }
 
     private void init() {
-
         canvas.addEventHandler(MouseEvent.MOUSE_PRESSED, e -> {
-
             lastMouseX = e.getX();
             lastMouseY = e.getY();
             wasDragging = false;
@@ -91,19 +89,15 @@ public class GraphInteractionController {
         });
 
         canvas.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
-
             if (draggedNode != null) {
                 draggedNode.dragging = false;
                 draggedNode = null;
             }
-
             draggingCamera = false;
-
             onRedraw.run();
         });
 
         canvas.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
-
             if (wasDragging) return;
 
             GraphNode node = findNode(e.getX(), e.getY());
@@ -114,7 +108,6 @@ public class GraphInteractionController {
         });
 
         canvas.addEventHandler(ScrollEvent.SCROLL, e -> {
-
             double delta = e.getDeltaY();
 
             if (delta > 0) {
@@ -124,7 +117,6 @@ public class GraphInteractionController {
             }
 
             camera.zoom = Math.max(0.1, Math.min(5.0, camera.zoom));
-
             onRedraw.run();
 
             e.consume();
@@ -132,7 +124,6 @@ public class GraphInteractionController {
     }
 
     private GraphNode findNode(double sx, double sy) {
-
         double wx = camera.screenToWorldX(sx);
         double wy = camera.screenToWorldY(sy);
 

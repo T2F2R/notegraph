@@ -74,14 +74,11 @@ public class GraphViewController {
 
         renderer = new GraphRendererCanvas(graphCanvas, camera);
 
-        // Применение текущей темы
         Theme currentTheme = themeManager.getCurrentTheme();
         renderer.setTheme(currentTheme);
 
-        // Первая отрисовка
         renderer.render(graph.nodes, graph.edges);
 
-        // Слушатель смены темы
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             System.out.println("Graph: смена темы -> " + newTheme);
 
@@ -89,7 +86,6 @@ public class GraphViewController {
             renderer.render(graph.nodes, graph.edges);
         });
 
-        // Контроллер взаимодействия
         new GraphInteractionController(
                 graphCanvas,
                 camera,
@@ -115,10 +111,8 @@ public class GraphViewController {
             @Override
             public void handle(long now) {
 
-                // Шаг физики графа
                 GraphPhysics.step(graph.nodes, graph.edges);
 
-                // Перерисовка
                 renderer.render(graph.nodes, graph.edges);
             }
         };

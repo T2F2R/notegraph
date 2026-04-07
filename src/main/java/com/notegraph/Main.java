@@ -8,6 +8,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +50,8 @@ public class Main extends Application {
             mainController = loader.getController();
 
             Scene scene = new Scene(root);
+
+            primaryStage.initStyle(StageStyle.UNDECORATED);
 
             try {
                 String css = getClass().getResource("/css/styles.css").toExternalForm();

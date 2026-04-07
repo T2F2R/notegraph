@@ -2,16 +2,15 @@ package com.notegraph.graph;
 
 public class GraphCamera {
 
-    public double x = 0;      // Позиция камеры X (для рендеринга)
-    public double y = 0;      // Позиция камеры Y (для рендеринга)
-    public double zoom = 1;   // Масштаб
+    public double x = 0;
+    public double y = 0;
+    public double zoom = 1;
 
-    public double offsetX = 0;  // Временное смещение при драге
-    public double offsetY = 0;  // Временное смещение при драге
+    public double offsetX = 0;
+    public double offsetY = 0;
 
     /**
      * Применить offset к основной позиции камеры
-     * Вызывайте это после каждого кадра рендеринга
      */
     public void applyOffset() {
         x += offsetX;
@@ -24,7 +23,6 @@ public class GraphCamera {
      * Преобразование из экранных координат в мировые
      */
     public double screenToWorldX(double sx) {
-        // Учитываем как основную позицию, так и временный offset
         return (sx - x - offsetX) / zoom;
     }
 
@@ -36,7 +34,6 @@ public class GraphCamera {
      * Преобразование из мировых координат в экранные
      */
     public double worldToScreenX(double wx) {
-        // Учитываем как основную позицию, так и временный offset
         return wx * zoom + x + offsetX;
     }
 
@@ -45,7 +42,6 @@ public class GraphCamera {
     }
 
     /**
-     * ДОБАВЬТЕ ЭТОТ МЕТОД!
      * Перемещение камеры на dx, dy
      */
     public void pan(double dx, double dy) {

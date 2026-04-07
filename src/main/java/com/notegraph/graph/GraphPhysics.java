@@ -15,7 +15,6 @@ public class GraphPhysics {
         double centerX = 0;
         double centerY = 0;
 
-        // --- ОТТАЛКИВАНИЕ ---
         for (GraphNode a : nodes) {
             for (GraphNode b : nodes) {
                 if (a == b) continue;
@@ -31,7 +30,6 @@ public class GraphPhysics {
             }
         }
 
-        // --- ПРИТЯЖЕНИЕ ПО РЁБРАМ ---
         for (GraphEdge e : edges) {
             GraphNode a = e.a;
             GraphNode b = e.b;
@@ -54,7 +52,6 @@ public class GraphPhysics {
             n.vy += dy * gravity;
         }
 
-        // --- ОБНОВЛЕНИЕ ПОЗИЦИИ ---
         for (GraphNode n : nodes) {
 
             if (n.dragging) continue;

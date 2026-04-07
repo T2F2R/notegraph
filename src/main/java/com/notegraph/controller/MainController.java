@@ -29,6 +29,7 @@ import javafx.scene.layout.*;
 import javafx.scene.web.WebView;
 import javafx.scene.Scene;
 
+import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 
 import org.slf4j.Logger;
@@ -64,6 +65,7 @@ public class MainController {
     @FXML private VBox placeholderPane;
     @FXML private TreeView<Path> notesTreeView;
     @FXML private BorderPane rootPane;
+    @FXML private HBox titleBar;
 
     private final Map<Path, Tab> openTabs = new HashMap<>();
     private Timer autoSaveTimer;
@@ -76,6 +78,9 @@ public class MainController {
 
     private final ThemeManager themeManager = ThemeManager.getInstance();
     private final FontManager fontManager = FontManager.getInstance();
+
+    private double xOffset = 0;
+    private double yOffset = 0;
 
     private static class SearchResult {
         Path notePath;
@@ -112,83 +117,75 @@ public class MainController {
         boolean isEditMode = true;
     }
 
-    public class LinkClickHandler {
-        public void openNote(String noteTitle) {
-            Platform.runLater(() -> {
-                Optional<Note> noteOpt = noteService.getNoteByTitle(noteTitle);
-
-                if (noteOpt.isPresent()) {
-                    openNoteInTab(noteOpt.get());
-                } else {
-                    try {
-                        Note newNote = noteService.createNote(noteTitle, "");
-                        openNoteInTab(newNote);
-                        refreshTree();
-                        updateNotesCount();
-                    } catch (Exception e) {
-                        showError("%error.error", e.getMessage());
-                    }
-                }
-            });
-        }
-    }
-
     @FXML
     public void initialize() {
         logger.info("Инициализация MainController");
-
         setupSorting();
         setupTreeView();
         setupSearch();
         setupAutoSave();
         setupTabPaneListener();
         createPlusTab();
-
         refreshTree();
         updateNotesCount();
-
         updateTexts();
-
         ThemeManager themeManager = ThemeManager.getInstance();
-
+        titleBar.setOnMousePressed(event -> {
+            xOffset = event.getSceneX();
+            yOffset = event.getSceneY();
+        });
+        titleBar.setOnMouseDragged(event -> {
+            Stage stage = (Stage) titleBar.getScene().getWindow();
+            stage.setX(event.getScreenX() - xOffset);
+            stage.setY(event.getScreenY() - yOffset);
+        });
         var css = getClass().getResource("/css/app.css");
         if (css != null) {
             rootPane.getStylesheets().add(css.toExternalForm());
         } else {
             logger.warn("app.css не найден");
         }
-
         Platform.runLater(() -> {
             applyTheme(themeManager.getCurrentTheme());
             applyGlobalFont();
             refreshAllUI();
         });
-
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyTheme(newTheme);
             refreshAllUI();
         });
-
         fontManager.fontFamilyProperty().addListener((obs, oldVal, newVal) -> {
             applyGlobalFont();
             refreshAllUI();
         });
-
         fontManager.fontSizeProperty().addListener((obs, oldVal, newVal) -> {
             applyGlobalFont();
             refreshAllUI();
         });
     }
 
+    @FXML
+    private void handleClose() {
+        ((Stage) titleBar.getScene().getWindow()).close();
+    }
+
+    @FXML
+    private void handleMinimize() {
+        ((Stage) titleBar.getScene().getWindow()).setIconified(true);
+    }
+
+    @FXML
+    private void handleMaximize() {
+        Stage stage = (Stage) titleBar.getScene().getWindow();
+        stage.setMaximized(!stage.isMaximized());
+    }
+
     private void refreshAllUI() {
-
         for (Tab tab : openTabs.values()) {
-
             if (tab.getUserData() instanceof NoteTabContent content) {
                 updatePreview(content);
             }
         }
-
     }
 
     private void updateTexts() {
@@ -290,11 +287,6 @@ public class MainController {
                 : "/css/light-theme.css";
 
         var resource = getClass().getResource(path);
-
-        if (resource == null) {
-            System.err.println("CSS NOT FOUND: " + path);
-            return;
-        }
 
         String css = resource.toExternalForm();
 
@@ -814,7 +806,7 @@ public class MainController {
             }
         }
 
-        logger.debug("   Заметка не открыта, открываем в текущей вкладке");
+        logger.debug("Заметка не открыта, открываем в текущей вкладке");
 
         if (currentTab.getUserData() instanceof NoteTabContent) {
             NoteTabContent oldContent = (NoteTabContent) currentTab.getUserData();
@@ -834,7 +826,7 @@ public class MainController {
             }
 
             openTabs.remove(oldContent.note.getPath());
-            logger.debug("   Старая заметка удалена из openTabs");
+            logger.debug("Старая заметка удалена из openTabs");
         }
 
         logger.debug("Создаем NoteTabContent для '{}'", note.getTitle());
@@ -1019,6 +1011,18 @@ public class MainController {
         content.contentTextArea.setWrapText(true);
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
+        content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (content.previewScrollPane.isVisible()) {
+                updatePreview(content);
+            }
+        });
+
+        content.contentTextArea.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (content.previewScrollPane.isVisible()) {
+                updatePreview(content);
+            }
+        });
+
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
 
         content.webView = new WebView();
@@ -1063,8 +1067,43 @@ public class MainController {
         applyFontToContent(content);
         updateToggleButtonsStyle(content);
 
+        content.titleField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal) {
+                String newTitle = content.titleField.getText().trim();
+                String oldTitle = content.note.getTitle();
+
+                if (!oldTitle.equals(newTitle)) {
+                    LinkIndexManager.getInstance().renameNote(oldTitle, newTitle);
+                }
+
+                if (!newTitle.equals(oldTitle) && !newTitle.isEmpty()) {
+                    try {
+                        Path oldPath = content.note.getPath();
+                        Path newPath = oldPath.getParent().resolve(newTitle + ".md");
+
+                        if (Files.exists(newPath)) {
+                            logger.warn("Файл уже существует");
+                            return;
+                        }
+
+                        Files.move(oldPath, newPath);
+
+                        content.note.setTitle(newTitle);
+                        content.note.setPath(newPath);
+
+                        refreshTree();
+
+                    } catch (Exception e) {
+                        logger.error("Ошибка переименования", e);
+                    }
+                }
+            }
+        });
+
         return content;
     }
+
+
 
     private void updateToggleButtonsStyle(NoteTabContent content) {
 
@@ -1113,7 +1152,6 @@ public class MainController {
 
     @FXML
     private void handleFontSettings() {
-        System.out.println("OPEN FONT DIALOG");
         new FontSelectorDialog().showAndApply();
     }
 
@@ -1137,9 +1175,30 @@ public class MainController {
 
     private void updatePreview(NoteTabContent content) {
         if (content == null || content.note == null) return;
-        String html = markdownRenderer.renderToHtml(
+
+        String title = content.titleField.getText();
+        String bodyHtml = markdownRenderer.renderToHtml(
                 content.contentTextArea.getText()
         );
+
+        String html = """
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {
+                }
+                h1 {
+                }
+            </style>
+        </head>
+        <body>
+            <h1>%s</h1>
+            %s
+        </body>
+        </html>
+        """.formatted(title, bodyHtml);
+
         content.webView.getEngine().loadContent(html);
     }
 
@@ -1185,8 +1244,6 @@ public class MainController {
 
     private void openOrCreateNote(String title) {
         logger.info("openOrCreateNote вызван для: '{}'", title);
-
-        logger.info("ДИАГНОСТИКА TabPane:");
         logger.info("Всего вкладок: {}", notesTabPane.getTabs().size());
 
         Tab selectedTab = notesTabPane.getSelectionModel().getSelectedItem();
@@ -1551,7 +1608,6 @@ public class MainController {
 
     @FXML
     private void handleDelete() {
-
         TreeItem<Path> sel = notesTreeView.getSelectionModel().getSelectedItem();
 
         if (sel == null || sel.getValue() == null || !fsManager.isNote(sel.getValue())) {
@@ -1567,24 +1623,17 @@ public class MainController {
         );
 
         a.showAndWait().ifPresent(r -> {
-
             if (r == ButtonType.OK) {
-
                 try {
                     Path p = sel.getValue();
-
                     Tab tab = openTabs.get(p);
-
                     if (tab != null) {
                         notesTabPane.getTabs().remove(tab);
                         openTabs.remove(p);
                     }
-
                     noteService.deleteNote(p);
-
                     refreshTree();
                     updateNotesCount();
-
                 } catch (Exception e) {
                     showError("Error", e.getMessage());
                 }

@@ -75,22 +75,8 @@ public class FontManager {
         return fontSize.get();
     }
 
-
-    public Font createFont() {
-        return Font.font(getCurrentFontFamily(), getCurrentFontSize());
-    }
-
-    public Font createFont(double size) {
-        return Font.font(getCurrentFontFamily(), size);
-    }
-
     public List<String> getAvailableFonts() {
         return Font.getFamilies();
-    }
-
-    public String getGlobalStyle() {
-        return "-fx-font-family: '" + getCurrentFontFamily() + "';" +
-                "-fx-font-size: " + getCurrentFontSize() + "px;";
     }
 
     private double parseFontSize(String value) {
