@@ -10,14 +10,47 @@
     <top>
         <VBox>
             <HBox fx:id="titleBar" alignment="CENTER_LEFT" prefHeight="30" spacing="10" style="-fx-background-color: -fx-background;">
-
                 <Label text="NoteGraph" />
-
                 <Pane HBox.hgrow="ALWAYS" />
 
-                <Button fx:id="collapseButton" onAction="#handleMinimize" text="—" />
-                <Button fx:id="expandButton" onAction="#handleMaximize" text="□" />
-                <Button fx:id="exitButton" onAction="#handleClose" text="X" />
+                <Button fx:id="collapseButton" onAction="#handleMinimize">
+                    <tooltip>
+                        <Tooltip text="Свернуть" />
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitHeight="16" fitWidth="16">
+                            <image>
+                                <Image url="@/icons/minimize.png" />
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
+
+                <Button fx:id="expandButton" onAction="#handleMaximize">
+                    <tooltip>
+                        <Tooltip text="Развернуть" />
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitHeight="16" fitWidth="16">
+                            <image>
+                                <Image url="@/icons/maximize.png" />
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
+
+                <Button fx:id="exitButton" onAction="#handleClose">
+                    <tooltip>
+                        <Tooltip text="Закрыть" />
+                    </tooltip>
+                    <graphic>
+                        <ImageView fitHeight="16" fitWidth="16">
+                            <image>
+                                <Image url="@/icons/close.png" />
+                            </image>
+                        </ImageView>
+                    </graphic>
+                </Button>
             </HBox>
             <MenuBar>
                 <Menu fx:id="menuFile" text="%menu.file">
