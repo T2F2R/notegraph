@@ -28,7 +28,6 @@ public class LanguageManager {
     private LanguageManager() {
         metadataManager = MetadataManager.getInstance();
 
-        // ===== ЗАГРУЗКА ЯЗЫКА =====
         String savedLang = metadataManager.getPreference(KEY_LANGUAGE, "ru");
 
         Locale initialLocale = switch (savedLang) {
@@ -39,12 +38,10 @@ public class LanguageManager {
         locale.set(initialLocale);
         bundle = loadBundle(initialLocale);
 
-        // ===== СЛУШАТЕЛЬ СМЕНЫ ЯЗЫКА =====
         locale.addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
                 bundle = loadBundle(newVal);
 
-                // сохранить язык
                 metadataManager.setPreference(KEY_LANGUAGE, newVal.getLanguage());
             }
         });
@@ -54,8 +51,6 @@ public class LanguageManager {
         return INSTANCE;
     }
 
-    // ===== PROPERTY =====
-
     public ObjectProperty<Locale> localeProperty() {
         return locale;
     }
@@ -63,8 +58,6 @@ public class LanguageManager {
     public Locale getLocale() {
         return locale.get();
     }
-
-    // ===== УСТАНОВКА ЯЗЫКА =====
 
     public void setLocale(Locale locale) {
         if (locale != null && !locale.equals(this.locale.get())) {
@@ -79,8 +72,6 @@ public class LanguageManager {
     public void switchToEnglish() {
         setLocale(Locale.ENGLISH);
     }
-
-    // ===== ДОСТУП К СТРОКАМ =====
 
     public ResourceBundle getBundle() {
         return bundle;
@@ -102,15 +93,12 @@ public class LanguageManager {
         }
     }
 
-    // ===== ЗАГРУЗКА UTF-8 BUNDLE =====
-
     private ResourceBundle loadBundle(Locale locale) {
         String baseName = "messages";
         String bundleName = baseName + "_" + locale.getLanguage() + ".properties";
 
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream(bundleName)) {
             if (stream == null) {
-                // fallback
                 return ResourceBundle.getBundle(baseName, locale);
             }
 

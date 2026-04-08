@@ -30,7 +30,6 @@ public class FileSystemNoteRepository implements NoteRepository {
     @Override
     public Note create(Note note) {
         try {
-            // Если путь не установлен, создаем файл
             if (note.getPath() == null) {
                 Path parentFolder = fsManager.getVaultPath();
                 Note created = fsManager.createNote(
@@ -40,21 +39,18 @@ public class FileSystemNoteRepository implements NoteRepository {
                 );
                 note.setPath(created.getPath());
             } else {
-                // Путь уже установлен, просто создаем файл если его нет
                 if (!Files.exists(note.getPath())) {
                     Files.createFile(note.getPath());
                 }
             }
-            
-            // Инициализируем frontmatter если пустой
+
             if (note.getFrontmatter().isEmpty()) {
                 note.getFrontmatter().put("title", note.getTitle());
                 note.getFrontmatter().put("created", note.getCreated().toString());
                 note.getFrontmatter().put("modified", note.getModified().toString());
                 note.getFrontmatter().put("tags", note.getTags());
             }
-            
-            // Сохраняем содержимое
+
             NoteParser.saveNote(note);
             
             logger.info("Создана заметка: {}", note.getPath());
@@ -67,8 +63,6 @@ public class FileSystemNoteRepository implements NoteRepository {
     
     @Override
     public Optional<Note> findById(Integer id) {
-        // В файловой системе нет числовых ID
-        // Этот метод оставлен для совместимости, но не используется
         logger.warn("findById вызван, но не поддерживается в файловой системе");
         return Optional.empty();
     }
@@ -144,7 +138,6 @@ public class FileSystemNoteRepository implements NoteRepository {
     
     @Override
     public void delete(Integer id) {
-        // В файловой системе нет числовых ID
         throw new UnsupportedOperationException("delete(Integer) не поддерживается в файловой системе. Используйте delete(Path)");
     }
     
@@ -198,15 +191,11 @@ public class FileSystemNoteRepository implements NoteRepository {
      */
     public Note rename(Note note, String newTitle) {
         try {
-            // Обновляем title в frontmatter
             note.setTitle(newTitle);
             note.getFrontmatter().put("title", newTitle);
-            
-            // Переименовываем файл
+
             Path newPath = fsManager.rename(note.getPath(), newTitle);
             note.setPath(newPath);
-            
-            // Сохраняем изменения
             NoteParser.saveNote(note);
             
             logger.info("Переименована заметка: {}", newPath);

@@ -112,8 +112,15 @@ public class LinkIndexManager {
     public void updateNoteLinks(Note note) {
         String noteTitle = note.getTitle();
 
+        if (noteTitle == null || noteTitle.isBlank()) {
+            logger.warn("Пропущено обновление индекса: пустой заголовок");
+            return;
+        }
+
         Set<String> oldOutgoingLinks = outgoingLinksIndex.getOrDefault(noteTitle, new HashSet<>());
         for (String targetTitle : oldOutgoingLinks) {
+            if (targetTitle == null || targetTitle.isBlank()) continue;
+
             Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
             backlinks.remove(noteTitle);
             if (backlinks.isEmpty()) {
@@ -123,7 +130,13 @@ public class LinkIndexManager {
             }
         }
 
-        Set<String> newOutgoingLinks = new HashSet<>(note.getOutgoingLinks());
+        Set<String> newOutgoingLinks = new HashSet<>();
+        for (String link : note.getOutgoingLinks()) {
+            if (link != null && !link.isBlank()) {
+                newOutgoingLinks.add(link);
+            }
+        }
+
         outgoingLinksIndex.put(noteTitle, newOutgoingLinks);
 
         for (String targetTitle : newOutgoingLinks) {
@@ -131,7 +144,7 @@ public class LinkIndexManager {
             backlinks.add(noteTitle);
             backlinksIndex.put(targetTitle, backlinks);
         }
-        
+
         saveIndex();
         logger.debug("Обновлены связи для заметки: {}", noteTitle);
     }
@@ -140,8 +153,16 @@ public class LinkIndexManager {
      * Удалить заметку из индекса
      */
     public void removeNote(String noteTitle) {
+
+        if (noteTitle == null || noteTitle.isBlank()) {
+            logger.warn("Пропущено удаление из индекса: пустой заголовок");
+            return;
+        }
+
         Set<String> outgoingLinks = outgoingLinksIndex.getOrDefault(noteTitle, new HashSet<>());
         for (String targetTitle : outgoingLinks) {
+            if (targetTitle == null || targetTitle.isBlank()) continue;
+
             Set<String> backlinks = backlinksIndex.getOrDefault(targetTitle, new HashSet<>());
             backlinks.remove(noteTitle);
             if (backlinks.isEmpty()) {
@@ -152,18 +173,10 @@ public class LinkIndexManager {
         }
 
         outgoingLinksIndex.remove(noteTitle);
-
         backlinksIndex.remove(noteTitle);
-        
+
         saveIndex();
         logger.debug("Удалены связи для заметки: {}", noteTitle);
-    }
-    
-    /**
-     * Получить backlinks (обратные ссылки) для заметки
-     */
-    public Set<String> getBacklinks(String noteTitle) {
-        return new HashSet<>(backlinksIndex.getOrDefault(noteTitle, new HashSet<>()));
     }
 
 
@@ -178,19 +191,16 @@ public class LinkIndexManager {
     public void renameNote(String oldTitle, String newTitle) {
         if (oldTitle.equals(newTitle)) return;
 
-        // --- outgoing ---
         Set<String> outgoing = outgoingLinksIndex.remove(oldTitle);
         if (outgoing != null) {
             outgoingLinksIndex.put(newTitle, outgoing);
         }
 
-        // --- backlinks ---
         Set<String> backlinks = backlinksIndex.remove(oldTitle);
         if (backlinks != null) {
             backlinksIndex.put(newTitle, backlinks);
         }
 
-        // --- обновляем ссылки у других заметок ---
         for (Map.Entry<String, Set<String>> entry : outgoingLinksIndex.entrySet()) {
             Set<String> links = entry.getValue();
             if (links.remove(oldTitle)) {

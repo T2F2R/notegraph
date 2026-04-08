@@ -36,30 +36,24 @@ public class NoteParser {
         Note note = new Note(path);
         String content = Files.readString(path);
         note.setContent(content);
-        
-        // Парсим frontmatter и body
+
         Matcher matcher = FRONTMATTER_PATTERN.matcher(content);
         
         if (matcher.matches()) {
-            // Есть frontmatter
             String frontmatterStr = matcher.group(1);
             String bodyContent = matcher.group(2);
             
             note.setFrontmatter(parseFrontmatter(frontmatterStr));
             note.setBodyContent(bodyContent);
-            
-            // Извлекаем данные из frontmatter
+
             extractMetadataFromFrontmatter(note);
         } else {
-            // Нет frontmatter - все содержимое это body
             note.setBodyContent(content);
             note.setFrontmatter(new HashMap<>());
         }
-        
-        // Извлекаем исходящие ссылки
+
         note.extractOutgoingLinks();
-        
-        // Если дат нет во frontmatter, берем из файловой системы
+
         if (note.getCreated() == null) {
             note.setCreated(FileSystemManager.getInstance().getCreated(path));
         }
@@ -74,11 +68,9 @@ public class NoteParser {
      * Записать заметку в файл
      */
     public static void saveNote(Note note) throws IOException {
-        // Обновляем modified дату
         note.setModified(LocalDateTime.now());
         note.getFrontmatter().put("modified", note.getModified().toString());
-        
-        // Генерируем полное содержимое
+
         String content = generateFrontmatter(note.getFrontmatter()) + 
                         "\n\n" + 
                         note.getBodyContent();
@@ -102,11 +94,9 @@ public class NoteParser {
             if (colonIndex > 0) {
                 String key = line.substring(0, colonIndex).trim();
                 String value = line.substring(colonIndex + 1).trim();
-                
-                // Убираем кавычки
+
                 value = value.replaceAll("^\"|\"$", "");
-                
-                // Парсим списки [tag1, tag2]
+
                 if (value.startsWith("[") && value.endsWith("]")) {
                     String listContent = value.substring(1, value.length() - 1);
                     if (!listContent.trim().isEmpty()) {
@@ -160,13 +150,11 @@ public class NoteParser {
      */
     private static void extractMetadataFromFrontmatter(Note note) {
         Map<String, Object> fm = note.getFrontmatter();
-        
-        // Title
+
         if (fm.containsKey("title")) {
             note.setTitle((String) fm.get("title"));
         }
-        
-        // Created
+
         if (fm.containsKey("created")) {
             try {
                 String createdStr = (String) fm.get("created");
@@ -175,8 +163,7 @@ public class NoteParser {
                 logger.warn("Не удалось распарсить дату created: {}", fm.get("created"));
             }
         }
-        
-        // Modified
+
         if (fm.containsKey("modified")) {
             try {
                 String modifiedStr = (String) fm.get("modified");
@@ -185,8 +172,7 @@ public class NoteParser {
                 logger.warn("Не удалось распарсить дату modified: {}", fm.get("modified"));
             }
         }
-        
-        // Tags
+
         if (fm.containsKey("tags")) {
             Object tagsObj = fm.get("tags");
             if (tagsObj instanceof List) {
@@ -197,8 +183,7 @@ public class NoteParser {
                 note.setTags(tags);
             }
         }
-        
-        // Bookmarked
+
         if (fm.containsKey("bookmarked")) {
             Object bookmarked = fm.get("bookmarked");
             if (bookmarked instanceof Boolean) {
@@ -216,8 +201,7 @@ public class NoteParser {
         if (dateStr == null || dateStr.isEmpty()) {
             return null;
         }
-        
-        // Пробуем несколько форматов
+
         String[] formats = {
             "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
             "yyyy-MM-dd'T'HH:mm:ss",
@@ -230,11 +214,9 @@ public class NoteParser {
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
                 return LocalDateTime.parse(dateStr, formatter);
             } catch (DateTimeParseException e) {
-                // Пробуем следующий формат
             }
         }
-        
-        // Если ничего не подошло, пробуем стандартный парсинг
+
         try {
             return LocalDateTime.parse(dateStr);
         } catch (DateTimeParseException e) {

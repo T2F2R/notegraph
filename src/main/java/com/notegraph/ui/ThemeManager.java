@@ -12,7 +12,6 @@ public class ThemeManager {
     private final MetadataManager metadataManager = MetadataManager.getInstance();
 
     private ThemeManager() {
-        // Загружаем сохраненную тему или используем светлую по умолчанию
         String savedTheme = metadataManager.getPreference("theme", "LIGHT");
         Theme theme = "DARK".equals(savedTheme) ? Theme.DARK : Theme.LIGHT;
         currentTheme.set(theme);
@@ -35,7 +34,6 @@ public class ThemeManager {
         System.out.println("ThemeManager.setTheme вызван: " + (theme == Theme.DARK ? "DARK" : "LIGHT"));
         currentTheme.set(theme);
 
-        // Сохраняем тему в настройки
         String themeValue = (theme == Theme.DARK) ? "DARK" : "LIGHT";
         metadataManager.setPreference("theme", themeValue);
 
@@ -54,9 +52,5 @@ public class ThemeManager {
             System.out.println("ThemeManager.toggleTheme: LIGHT -> DARK");
             setTheme(Theme.DARK);
         }
-    }
-
-    public boolean isDark() {
-        return currentTheme.get() == Theme.DARK;
     }
 }

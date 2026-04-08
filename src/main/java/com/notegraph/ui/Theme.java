@@ -6,24 +6,24 @@ public class Theme {
 
     public static Theme LIGHT = new Theme(
             Color.WHITE,           // background
-            Color.rgb(30, 30, 30), // text
-            Color.rgb(200, 200, 200), // gridLines
-            Color.rgb(100, 100, 100), // edgeColor
-            Color.rgb(66, 135, 245), // nodeColor
-            Color.rgb(255, 193, 7),  // nodeColorHovered
-            Color.rgb(76, 175, 80),  // nodeColorSelected
-            Color.rgb(220, 220, 220) // nodeBorder
+            Color.rgb(30, 30, 30),
+            Color.rgb(200, 200, 200),
+            Color.rgb(100, 100, 100),
+            Color.rgb(66, 135, 245),
+            Color.rgb(255, 193, 7),
+            Color.rgb(76, 175, 80),
+            Color.rgb(220, 220, 220)
     );
 
     public static Theme DARK = new Theme(
-            Color.rgb(18, 18, 18),   // background
-            Color.rgb(220, 220, 220), // text
-            Color.rgb(40, 40, 40),    // gridLines
-            Color.rgb(80, 80, 80),    // edgeColor
-            Color.rgb(124, 58, 237),  // nodeColor (purple)
-            Color.rgb(168, 85, 247),  // nodeColorHovered
-            Color.rgb(192, 132, 252), // nodeColorSelected
-            Color.rgb(60, 60, 60)     // nodeBorder
+            Color.rgb(18, 18, 18),
+            Color.rgb(220, 220, 220),
+            Color.rgb(40, 40, 40),
+            Color.rgb(80, 80, 80),
+            Color.rgb(124, 58, 237),
+            Color.rgb(168, 85, 247),
+            Color.rgb(192, 132, 252),
+            Color.rgb(60, 60, 60)
     );
 
     public final Color background;

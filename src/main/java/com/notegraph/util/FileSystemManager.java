@@ -45,17 +45,14 @@ public class FileSystemManager {
      */
     private void initializeVault() {
         try {
-            // Создаем основную директорию vault
             if (!Files.exists(vaultPath)) {
                 Files.createDirectories(vaultPath);
                 logger.info("Создана директория vault: {}", vaultPath.toAbsolutePath());
             }
 
-            // Создаем скрытую директорию для метаданных
             if (!Files.exists(metadataPath)) {
                 Files.createDirectories(metadataPath);
 
-                // Инициализируем пустые файлы метаданных
                 Path metadataFile = metadataPath.resolve(METADATA_FILE);
                 Path indexFile = metadataPath.resolve(INDEX_FILE);
 
@@ -83,10 +80,6 @@ public class FileSystemManager {
         return vaultPath;
     }
 
-
-    public Path getNotePath(String title) {
-        return getVaultPath().resolve(title + ".md");
-    }
     /**
      * Получить путь к директории метаданных
      */
@@ -277,7 +270,6 @@ public class FileSystemManager {
      * Очистить имя файла от недопустимых символов
      */
     private String sanitizeFileName(String name) {
-        // Удаляем недопустимые символы для имени файла
         return name.replaceAll("[\\\\/:*?\"<>|]", "").trim();
     }
 

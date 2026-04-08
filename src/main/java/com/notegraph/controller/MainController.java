@@ -760,10 +760,8 @@ public class MainController {
             logger.error("notesTabPane == null!");
             return;
         }
-        logger.debug("notesTabPane существует");
 
         Tab currentTab = notesTabPane.getSelectionModel().getSelectedItem();
-        logger.debug("Текущая вкладка: {}", currentTab != null ? currentTab.getText() : "null");
 
         boolean isNoteTab = currentTab != null
                 && currentTab.getUserData() instanceof NoteTabContent;
@@ -771,95 +769,77 @@ public class MainController {
         boolean isPlusTab = currentTab != null
                 && "PLUS_TAB".equals(currentTab.getUserData());
 
-        logger.debug("Тип вкладки: isNote={}, isPlus={}", isNoteTab, isPlusTab);
-
+        // ❗ если нельзя использовать текущую вкладку — создаём новую
         if (currentTab == null || isPlusTab || !isNoteTab) {
-            logger.info("Текущая вкладка НЕ является заметкой, создаем новую вкладку");
             openNoteInTab(note);
             return;
         }
 
+        // ❗ если уже открыта — просто переключаемся
         if (openTabs.containsKey(note.getPath())) {
-            logger.info("Заметка найдена в openTabs");
             Tab existingTab = openTabs.get(note.getPath());
 
-            if (!notesTabPane.getTabs().contains(existingTab)) {
-                logger.error("РАССИНХРОНИЗАЦИЯ: вкладка в openTabs, но НЕ в TabPane!");
-                logger.info("Удаляем из openTabs и создаем заново");
-                openTabs.remove(note.getPath());
-            } else {
-                logger.debug("Вкладка существует в TabPane");
-
-                Platform.runLater(() -> {
-                    int index = notesTabPane.getTabs().indexOf(existingTab);
-                    logger.debug("Индекс вкладки: {}", index);
-
-                    if (index >= 0) {
-                        notesTabPane.getSelectionModel().select(index);
-                        logger.info("Вкладка выбрана по индексу {}", index);
-                    } else {
-                        logger.error("Индекс -1, вкладка исчезла!");
-                    }
-                });
-
+            if (notesTabPane.getTabs().contains(existingTab)) {
+                Platform.runLater(() ->
+                        notesTabPane.getSelectionModel().select(existingTab)
+                );
                 return;
+            } else {
+                openTabs.remove(note.getPath());
             }
         }
 
-        logger.debug("Заметка не открыта, открываем в текущей вкладке");
-
-        if (currentTab.getUserData() instanceof NoteTabContent) {
-            NoteTabContent oldContent = (NoteTabContent) currentTab.getUserData();
-            logger.debug("Сохраняем старую заметку: '{}'", oldContent.note.getTitle());
-
-            if (oldContent.updatedLabel != null && oldContent.linksCountLabel != null) {
-                saveNoteContent(oldContent);
-            } else {
-                try {
+        // 🔥 СОХРАНЯЕМ СТАРУЮ ЗАМЕТКУ
+        if (currentTab.getUserData() instanceof NoteTabContent oldContent) {
+            try {
+                if (oldContent.note != null && oldContent.contentTextArea != null) {
                     oldContent.note.setBodyContent(oldContent.contentTextArea.getText());
                     oldContent.note.extractOutgoingLinks();
                     noteService.updateNote(oldContent.note);
-                    logger.debug("Старая заметка сохранена в файл");
-                } catch (Exception e) {
-                    logger.error("Ошибка сохранения при переключении", e);
                 }
+            } catch (Exception e) {
+                logger.error("Ошибка сохранения при переключении", e);
             }
 
             openTabs.remove(oldContent.note.getPath());
-            logger.debug("Старая заметка удалена из openTabs");
         }
 
-        logger.debug("Создаем NoteTabContent для '{}'", note.getTitle());
+        // 🔥 СОЗДАЁМ НОВЫЙ КОНТЕНТ
         NoteTabContent newContent = createTabContent(note);
-        logger.debug("NoteTabContent создан");
 
-        logger.debug("Устанавливаем текст вкладки: '{}'", note.getTitle());
-        currentTab.setText(note.getTitle());
+        // 🔥 ВАЖНО: привязываем Tab
+        newContent.tab = currentTab;
 
-        logger.debug("Устанавливаем content в вкладку");
-        currentTab.setContent(newContent.container);
+        // 🔥 ОБНОВЛЯЕМ UI (в JavaFX потоке)
+        Platform.runLater(() -> {
 
-        logger.debug("Устанавливаем userData");
-        currentTab.setUserData(newContent);
+            // 1. Заголовок вкладки
+            currentTab.setText(note.getTitle());
 
-        logger.debug("Добавляем в openTabs: {}", note.getPath());
+            // 2. Контент
+            currentTab.setContent(newContent.container);
+
+            // 3. UserData
+            currentTab.setUserData(newContent);
+
+            // 4. Выбор вкладки
+            notesTabPane.getSelectionModel().select(currentTab);
+        });
+
+        // 🔥 ОБНОВЛЯЕМ openTabs
         openTabs.put(note.getPath(), currentTab);
 
-        String relativePath = fsManager.getVaultPath().relativize(note.getPath()).toString();
-        metadataManager.addRecentNote(relativePath);
-        logger.debug("Добавлено в recent notes");
+        // 🔥 RECENT NOTES
+        try {
+            String relativePath = fsManager.getVaultPath()
+                    .relativize(note.getPath())
+                    .toString();
+            metadataManager.addRecentNote(relativePath);
+        } catch (Exception e) {
+            logger.warn("Ошибка добавления в recent notes", e);
+        }
 
         logger.info("Заметка '{}' открыта в текущей вкладке успешно", note.getTitle());
-
-        if (currentTab.getContent() == null) {
-            logger.error("ПРОБЛЕМА: currentTab.getContent() == null после установки!");
-        } else {
-            logger.debug("currentTab.getContent() установлен корректно");
-            if (!currentTab.getContent().isVisible()) {
-                logger.warn("Content не видим, делаем видимым");
-                currentTab.getContent().setVisible(true);
-            }
-        }
     }
 
     /**
@@ -870,9 +850,7 @@ public class MainController {
         logger.info("openNoteInTab: '{}'", note.getTitle());
 
         if (openTabs.containsKey(note.getPath())) {
-
             Tab existingTab = openTabs.get(note.getPath());
-
             if (notesTabPane.getTabs().contains(existingTab)) {
                 notesTabPane.getSelectionModel().select(existingTab);
                 return;
@@ -882,22 +860,17 @@ public class MainController {
         }
 
         Tab tab = new Tab(note.getTitle());
-
         NoteTabContent content = createTabContent(note);
-
+        content.tab = tab;
         tab.setContent(content.container);
-
         tab.setUserData(content);
 
         final Path notePath = note.getPath();
 
         tab.setOnClosed(e -> {
-
             logger.debug("Закрытие вкладки '{}'", note.getTitle());
-
             try {
                 if (tab.getUserData() instanceof NoteTabContent tabContent) {
-
                     if (tabContent.note != null && tabContent.contentTextArea != null) {
                         tabContent.note.setBodyContent(tabContent.contentTextArea.getText());
                         tabContent.note.extractOutgoingLinks();
@@ -993,24 +966,27 @@ public class MainController {
         content.editModeButton.setOnAction(e -> switchToEditMode(content));
         content.previewModeButton.setOnAction(e -> switchToPreviewMode(content));
 
-        content.editModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
-            updateToggleButtonsStyle(content);
-        });
+        content.editModeButton.selectedProperty().addListener((obs, oldVal, isSelected) ->
+                updateToggleButtonsStyle(content)
+        );
 
-        content.previewModeButton.selectedProperty().addListener((obs, oldVal, isSelected) -> {
-            updateToggleButtonsStyle(content);
-        });
+        content.previewModeButton.selectedProperty().addListener((obs, oldVal, isSelected) ->
+                updateToggleButtonsStyle(content)
+        );
 
         toolbar.getChildren().addAll(content.editModeButton, content.previewModeButton);
 
         content.editArea = new VBox(5);
-
         content.titleField = new TextField(note.getTitle());
+
+        content.editArea.setId("editArea");
+        content.titleField.setId("titleField");
 
         content.contentTextArea = new TextArea(note.getBodyContent());
         content.contentTextArea.setWrapText(true);
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
+        // 🔥 Обновление preview
         content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
             if (content.previewScrollPane.isVisible()) {
                 updatePreview(content);
@@ -1067,14 +1043,11 @@ public class MainController {
         applyFontToContent(content);
         updateToggleButtonsStyle(content);
 
+        // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ПЕРЕИМЕНОВАНИЯ
         content.titleField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) {
                 String newTitle = content.titleField.getText().trim();
                 String oldTitle = content.note.getTitle();
-
-                if (!oldTitle.equals(newTitle)) {
-                    LinkIndexManager.getInstance().renameNote(oldTitle, newTitle);
-                }
 
                 if (!newTitle.equals(oldTitle) && !newTitle.isEmpty()) {
                     try {
@@ -1088,8 +1061,17 @@ public class MainController {
 
                         Files.move(oldPath, newPath);
 
+                        // 🔥 ОБНОВЛЯЕМ МОДЕЛЬ
                         content.note.setTitle(newTitle);
                         content.note.setPath(newPath);
+
+                        // 🔥 ОБНОВЛЯЕМ TAB
+                        if (content.tab != null) {
+                            content.tab.setText(newTitle);
+                        }
+
+                        // 🔥 ОБНОВЛЯЕМ INDEX
+                        LinkIndexManager.getInstance().renameNote(oldTitle, newTitle);
 
                         refreshTree();
 
@@ -1617,24 +1599,47 @@ public class MainController {
 
         LanguageManager lm = LanguageManager.getInstance();
 
-        Alert a = new Alert(
+        Alert alert = new Alert(
                 Alert.AlertType.CONFIRMATION,
                 lm.get("note.delete.confirm")
         );
 
-        a.showAndWait().ifPresent(r -> {
-            if (r == ButtonType.OK) {
+        alert.showAndWait().ifPresent(result -> {
+            if (result == ButtonType.OK) {
                 try {
-                    Path p = sel.getValue();
-                    Tab tab = openTabs.get(p);
+                    Path path = sel.getValue();
+
+                    // 🔥 1. Получаем Note (ВАЖНО)
+                    Note note = noteService.getNoteByPath(path);
+
+                    // 🔥 2. Закрываем вкладку (если открыта)
+                    Tab tab = openTabs.get(path);
                     if (tab != null) {
                         notesTabPane.getTabs().remove(tab);
-                        openTabs.remove(p);
+                        openTabs.remove(path);
+
+                        logger.debug("Закрыта вкладка удаляемой заметки: {}", note.getTitle());
                     }
-                    noteService.deleteNote(p);
+
+                    // 🔥 3. Удаляем заметку через сервис
+                    noteService.deleteNote(note);
+
+                    // 🔥 4. Обновляем UI
                     refreshTree();
                     updateNotesCount();
+
+                    // 🔥 5. Если вкладок не осталось — создаём пустую
+                    if (notesTabPane.getTabs().isEmpty()) {
+                        Tab emptyTab = new Tab("...");
+                        emptyTab.setClosable(false);
+                        emptyTab.setUserData("EMPTY_TAB");
+
+                        notesTabPane.getTabs().add(emptyTab);
+                        notesTabPane.getSelectionModel().select(emptyTab);
+                    }
+
                 } catch (Exception e) {
+                    logger.error("Ошибка удаления заметки", e);
                     showError("Error", e.getMessage());
                 }
             }

@@ -23,7 +23,6 @@ public class MetadataManager {
     private final Gson gson;
     private Map<String, Object> metadata;
 
-    // Ключи метаданных
     private static final String KEY_BOOKMARKS = "bookmarks";
     private static final String KEY_SETTINGS = "settings";
     private static final String KEY_RECENT_NOTES = "recent_notes";
@@ -154,13 +153,10 @@ public class MetadataManager {
     public void addRecentNote(String relativePath) {
         List<String> recent = getRecentNotes();
 
-        // Удаляем если уже есть (переместим в начало)
         recent.remove(relativePath);
 
-        // Добавляем в начало
         recent.add(0, relativePath);
 
-        // Ограничиваем количество недавних заметок
         if (recent.size() > 20) {
             recent = recent.subList(0, 20);
         }
@@ -180,26 +176,6 @@ public class MetadataManager {
         }
         return new HashMap<>();
     }
-
-    /**
-     * Установить настройку
-     */
-    public void setSetting(String key, Object value) {
-        Map<String, Object> settings = getSettings();
-        settings.put(key, value);
-        metadata.put(KEY_SETTINGS, settings);
-        saveMetadata();
-    }
-
-    /**
-     * Получить настройку
-     */
-    public Object getSetting(String key, Object defaultValue) {
-        Map<String, Object> settings = getSettings();
-        return settings.getOrDefault(key, defaultValue);
-    }
-
-    // ========== НОВЫЕ МЕТОДЫ ДЛЯ PREFERENCES ==========
 
     /**
      * Получить все preferences
@@ -233,38 +209,9 @@ public class MetadataManager {
     }
 
     /**
-     * Удалить preference
-     */
-    public void removePreference(String key) {
-        Map<String, String> prefs = getPreferences();
-        if (prefs.remove(key) != null) {
-            metadata.put(KEY_PREFERENCES, prefs);
-            saveMetadata();
-            logger.debug("Preference удален: {}", key);
-        }
-    }
-
-    // ========== КОНЕЦ НОВЫХ МЕТОДОВ ==========
-
-    /**
      * Получить произвольное значение из метаданных
      */
     public Object get(String key) {
         return metadata.get(key);
-    }
-
-    /**
-     * Установить произвольное значение в метаданных
-     */
-    public void set(String key, Object value) {
-        metadata.put(key, value);
-        saveMetadata();
-    }
-
-    /**
-     * Перезагрузить метаданные из файла
-     */
-    public void reload() {
-        loadMetadata();
     }
 }

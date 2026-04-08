@@ -31,7 +31,6 @@ public class NoteServiceImpl implements NoteService {
     }
 
     public NoteServiceImpl(NoteRepository noteRepository) {
-        // Для совместимости с тестами
         if (noteRepository instanceof FileSystemNoteRepository) {
             this.noteRepository = (FileSystemNoteRepository) noteRepository;
         } else {
@@ -45,22 +44,17 @@ public class NoteServiceImpl implements NoteService {
     public Note createNote(String title, String content) {
         validateTitle(title);
 
-        // Проверка на существующий заголовок
         if (noteRepository.findByTitle(title).isPresent()) {
             throw new IllegalArgumentException("Заметка с таким заголовком уже существует: " + title);
         }
 
-        // Создаем заметку
         Note note = new Note(title, content != null ? content : "");
         note.setBodyContent(content != null ? content : "");
-        
-        // Извлекаем ссылки из содержимого
+
         note.extractOutgoingLinks();
-        
-        // Создаем файл
+
         note = noteRepository.create(note);
-        
-        // Обновляем индекс связей
+
         linkIndexManager.updateNoteLinks(note);
 
         logger.info("Создана заметка: {}", title);
@@ -74,14 +68,11 @@ public class NoteServiceImpl implements NoteService {
         }
         
         validateTitle(note.getTitle());
-        
-        // Извлекаем ссылки из содержимого
+
         note.extractOutgoingLinks();
-        
-        // Сохраняем заметку
+
         note = noteRepository.update(note);
-        
-        // Обновляем индекс связей
+
         linkIndexManager.updateNoteLinks(note);
         
         logger.info("Обновлена заметка: {}", note.getTitle());
@@ -90,8 +81,6 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     public Note getNoteById(Integer id) {
-        // В файловой системе нет ID
-        // Для совместимости возвращаем empty
         logger.warn("getNoteById вызван, но не поддерживается в файловой системе");
         return null;
     }
@@ -115,7 +104,6 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     public void deleteNote(Integer id) {
-        // В файловой системе нет ID
         logger.warn("deleteNote(Integer) вызван, но не поддерживается");
     }
     
@@ -127,11 +115,9 @@ public class NoteServiceImpl implements NoteService {
             logger.warn("Попытка удалить заметку с null путем");
             return;
         }
-        
-        // Удаляем из индекса связей
+
         linkIndexManager.removeNote(note.getTitle());
-        
-        // Удаляем файл
+
         noteRepository.delete(note);
         
         logger.info("Удалена заметка: {}", note.getTitle());
@@ -160,34 +146,6 @@ public class NoteServiceImpl implements NoteService {
     public int getNotesCount() {
         return noteRepository.count();
     }
-
-    /**
-     * Переименовать заметку
-     */
-    public Note renameNote(Note note, String newTitle) {
-        validateTitle(newTitle);
-        
-        // Проверяем, не занято ли новое имя
-        Optional<Note> existing = noteRepository.findByTitle(newTitle);
-        if (existing.isPresent() && !existing.get().equals(note)) {
-            throw new IllegalArgumentException("Заметка с таким заголовком уже существует: " + newTitle);
-        }
-        
-        String oldTitle = note.getTitle();
-        
-        // Удаляем старые связи из индекса
-        linkIndexManager.removeNote(oldTitle);
-        
-        // Переименовываем
-        note = noteRepository.rename(note, newTitle);
-        
-        // Добавляем новые связи в индекс
-        note.extractOutgoingLinks();
-        linkIndexManager.updateNoteLinks(note);
-        
-        logger.info("Заметка переименована: {} -> {}", oldTitle, newTitle);
-        return note;
-    }
     
     /**
      * Переместить заметку в другую папку
@@ -197,44 +155,12 @@ public class NoteServiceImpl implements NoteService {
         logger.info("Заметка перемещена: {}", note.getPath());
         return note;
     }
-    
-    /**
-     * Получить заметки в конкретной папке
-     */
-    public List<Note> getNotesInFolder(Path folder) {
-        return noteRepository.findInFolder(folder);
-    }
-    
-    /**
-     * Получить backlinks (обратные ссылки) для заметки
-     */
-    public List<Note> getBacklinks(Note note) {
-        var backlinkTitles = linkIndexManager.getBacklinks(note.getTitle());
-        
-        return backlinkTitles.stream()
-            .map(title -> noteRepository.findByTitle(title))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(Collectors.toList());
-    }
-    
-    /**
-     * Получить исходящие ссылки для заметки
-     */
-    public List<Note> getOutgoingLinks(Note note) {
-        return note.getOutgoingLinks().stream()
-            .map(title -> noteRepository.findByTitle(title))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(Collectors.toList());
-    }
 
     private void validateTitle(String title) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("Заголовок заметки не может быть пустым");
         }
-        
-        // Проверяем на недопустимые символы для имени файла
+
         if (title.matches(".*[\\\\/:*?\"<>|].*")) {
             throw new IllegalArgumentException("Заголовок содержит недопустимые символы: \\ / : * ? \" < > |");
         }

@@ -1,134 +1,124 @@
-<?import javafx.geometry.Insets?>
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.scene.image.*?>
 <?import javafx.scene.layout.*?>
 
-<?import javafx.scene.image.ImageView?>
-<?import javafx.scene.image.Image?>
-<BorderPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:id="rootPane"
-            fx:controller="com.notegraph.controller.MainController"
-            prefHeight="700.0"
-            prefWidth="1200.0">
+<BorderPane fx:id="rootPane" prefHeight="700.0" prefWidth="1200.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.notegraph.controller.MainController">
 
     <top>
         <VBox>
-            <HBox fx:id="titleBar"
-                  style="-fx-background-color: -fx-background;"
-                  alignment="CENTER_LEFT"
-                  spacing="10"
-                  prefHeight="30">
+            <HBox fx:id="titleBar" alignment="CENTER_LEFT" prefHeight="30" spacing="10" style="-fx-background-color: -fx-background;">
 
                 <Label text="NoteGraph" />
 
-                <Pane HBox.hgrow="ALWAYS"/>
+                <Pane HBox.hgrow="ALWAYS" />
 
-                <Button text="—" onAction="#handleMinimize"/>
-                <Button text="□" onAction="#handleMaximize"/>
-                <Button text="X" onAction="#handleClose"/>
+                <Button fx:id="collapseButton" onAction="#handleMinimize" text="—" />
+                <Button fx:id="expandButton" onAction="#handleMaximize" text="□" />
+                <Button fx:id="exitButton" onAction="#handleClose" text="X" />
             </HBox>
             <MenuBar>
-                <Menu text="%menu.file">
-                    <MenuItem text="%file.newNote" onAction="#handleNewNote" accelerator="Ctrl+N"/>
-                    <MenuItem text="%file.dailyNote" onAction="#handleDailyNote" accelerator="Ctrl+D"/>
-                    <MenuItem text="%file.newFolder" onAction="#handleNewFolder" accelerator="Ctrl+Shift+N"/>
-                    <MenuItem text="%file.save" onAction="#handleSave" accelerator="Ctrl+S"/>
-                    <SeparatorMenuItem/>
-                    <MenuItem text="%file.exit" onAction="#handleExit" accelerator="Ctrl+Q"/>
+                <Menu fx:id="menuFile" text="%menu.file">
+                    <MenuItem fx:id="menuItemNewFile" accelerator="Ctrl+N" onAction="#handleNewNote" text="%file.newNote" />
+                    <MenuItem fx:id="menuItemDailyNote" accelerator="Ctrl+D" onAction="#handleDailyNote" text="%file.dailyNote" />
+                    <MenuItem fx:id="menuItemNewFolder" accelerator="Ctrl+Shift+N" onAction="#handleNewFolder" text="%file.newFolder" />
+                    <MenuItem fx:id="menuItemSave" accelerator="Ctrl+S" onAction="#handleSave" text="%file.save" />
+                    <SeparatorMenuItem />
+                    <MenuItem fx:id="menuItemExit" accelerator="Ctrl+Q" onAction="#handleExit" text="%file.exit" />
                 </Menu>
 
-                <Menu text="%menu.edit">
-                    <MenuItem text="%edit.cut" onAction="#handleCut" accelerator="Ctrl+X"/>
-                    <MenuItem text="%edit.paste" onAction="#handlePaste" accelerator="Ctrl+V"/>
-                    <MenuItem text="%edit.delete" onAction="#handleDelete" accelerator="Delete"/>
+                <Menu fx:id="menuEdit" text="%menu.edit">
+                    <MenuItem fx:id="menuItemCut" accelerator="Ctrl+X" onAction="#handleCut" text="%edit.cut" />
+                    <MenuItem fx:id="menuItemPaste" accelerator="Ctrl+V" onAction="#handlePaste" text="%edit.paste" />
+                    <MenuItem fx:id="menuItemDelete" accelerator="Delete" onAction="#handleDelete" text="%edit.delete" />
                 </Menu>
 
-                <Menu text="%menu.search">
-                    <MenuItem text="%search.find" onAction="#handleSearch" accelerator="Ctrl+F"/>
+                <Menu fx:id="menuSearch" text="%menu.search">
+                    <MenuItem fx:id="menuItemFind" accelerator="Ctrl+F" onAction="#handleSearch" text="%search.find" />
                 </Menu>
 
-                <Menu text="%menu.view">
-                    <MenuItem text="%view.theme" onAction="#handleToggleTheme" accelerator="Ctrl+T"/>
-                    <MenuItem text="%view.font" onAction="#handleFontSettings" accelerator="Ctrl+Shift+F"/>
+                <Menu fx:id="menuView" text="%menu.view">
+                    <MenuItem fx:id="menuItemTheme" accelerator="Ctrl+T" onAction="#handleToggleTheme" text="%view.theme" />
+                    <MenuItem fx:id="menuItemFont" accelerator="Ctrl+Shift+F" onAction="#handleFontSettings" text="%view.font" />
                 </Menu>
 
-                <Menu text="%menu.graph">
-                    <MenuItem text="%graph.open" onAction="#handleOpenGraph"/>
+                <Menu fx:id="menuGraph" text="%menu.graph">
+                    <MenuItem fx:id="menuItemGraph" onAction="#handleOpenGraph" text="%graph.open" />
                 </Menu>
 
-                <Menu text="%menu.language">
-                    <MenuItem text="Русский" onAction="#switchToRussian"/>
-                    <MenuItem text="English" onAction="#switchToEnglish"/>
+                <Menu fx:id="menuLanguage" text="%menu.language">
+                    <MenuItem fx:id="menuItemRU" onAction="#switchToRussian" text="Русский" />
+                    <MenuItem fx:id="menuItemEN" onAction="#switchToEnglish" text="English" />
                 </Menu>
             </MenuBar>
 
             <ToolBar>
 
-                <Button onAction="#handleNewNote">
+                <Button fx:id="newNoteButton" onAction="#handleNewNote">
                     <tooltip>
-                        <Tooltip text="%toolbar.newNote"/>
+                        <Tooltip text="%toolbar.newNote" />
                     </tooltip>
                     <graphic>
-                        <ImageView fitWidth="16" fitHeight="16">
+                        <ImageView fitHeight="16" fitWidth="16">
                             <image>
-                                <Image url="@/icons/new-note.png"/>
+                                <Image url="@/icons/new-note.png" />
                             </image>
                         </ImageView>
                     </graphic>
                 </Button>
 
-                <Button onAction="#handleDailyNote">
+                <Button fx:id="dailyNoteButton" onAction="#handleDailyNote">
                     <tooltip>
-                        <Tooltip text="%toolbar.today"/>
+                        <Tooltip text="%toolbar.today" />
                     </tooltip>
                     <graphic>
-                        <ImageView fitWidth="16" fitHeight="16">
+                        <ImageView fitHeight="16" fitWidth="16">
                             <image>
-                                <Image url="@/icons/today.png"/>
+                                <Image url="@/icons/today.png" />
                             </image>
                         </ImageView>
                     </graphic>
                 </Button>
 
-                <Button onAction="#handleOpenNotesFolder">
+                <Button fx:id="openNotesFolderButton" onAction="#handleOpenNotesFolder">
                     <tooltip>
-                        <Tooltip text="%toolbar.openFolder"/>
+                        <Tooltip text="%toolbar.openFolder" />
                     </tooltip>
                     <graphic>
-                        <ImageView fitWidth="16" fitHeight="16">
+                        <ImageView fx:id="openFolderButton" fitHeight="16" fitWidth="16">
                             <image>
-                                <Image url="@/icons/root-folder.png"/>
+                                <Image url="@/icons/root-folder.png" />
                             </image>
                         </ImageView>
                     </graphic>
                 </Button>
 
-                <Separator orientation="VERTICAL"/>
+                <Separator orientation="VERTICAL" />
 
-                <Label text="%toolbar.search"/>
+                <Label text="%toolbar.search" />
 
-                <TextField fx:id="searchField"
-                           promptText="%toolbar.searchPrompt"
-                           prefWidth="200"/>
+                <TextField fx:id="searchField" prefWidth="200" promptText="%toolbar.searchPrompt" />
 
-                <Button onAction="#handleSearch">
+                <Button fx:id="searchButton" onAction="#handleSearch">
                     <tooltip>
-                        <Tooltip text="%toolbar.find"/>
+                        <Tooltip text="%toolbar.find" />
                     </tooltip>
                     <graphic>
-                        <ImageView fitWidth="16" fitHeight="16">
+                        <ImageView fitHeight="16" fitWidth="16">
                             <image>
-                                <Image url="@/icons/search.png"/>
+                                <Image url="@/icons/search.png" />
                             </image>
                         </ImageView>
                     </graphic>
                 </Button>
 
-                <Separator orientation="VERTICAL"/>
+                <Separator orientation="VERTICAL" />
 
-                <Label text="%toolbar.sort"/>
+                <Label text="%toolbar.sort" />
 
-                <ComboBox fx:id="sortComboBox" prefWidth="180"/>
+                <ComboBox fx:id="sortComboBox" prefWidth="180" />
 
             </ToolBar>
 
@@ -140,58 +130,39 @@
 
             <VBox>
                 <padding>
-                    <Insets top="10" right="10" bottom="10" left="10"/>
+                    <Insets bottom="10" left="10" right="10" top="10" />
                 </padding>
 
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="%notes.title" style="-fx-font-weight: bold;"/>
-                    <Label fx:id="notesCountLabel"
-                           text="%notes.count"
-                           style="-fx-text-fill: gray;"/>
+                <HBox alignment="CENTER_LEFT" spacing="10">
+                    <Label style="-fx-font-weight: bold;" text="%notes.title" />
+                    <Label fx:id="notesCountLabel" style="-fx-text-fill: gray;" text="%notes.count" />
                 </HBox>
 
-                <TreeView fx:id="notesTreeView" VBox.vgrow="ALWAYS"/>
+                <TreeView fx:id="notesTreeView" VBox.vgrow="ALWAYS" />
             </VBox>
 
             <StackPane>
 
-                <VBox fx:id="placeholderPane"
-                      alignment="CENTER"
-                      spacing="20"
-                      visible="true">
+                <VBox fx:id="placeholderPane" alignment="CENTER" spacing="20" visible="true">
 
-                    <Label text="%placeholder.text"
-                           style="-fx-text-fill: gray;"/>
+                    <Label style="-fx-text-fill: gray;" text="%placeholder.text" />
 
-                    <HBox spacing="10" alignment="CENTER">
-                        <Button text="%placeholder.newNote" onAction="#handleNewNote"/>
-                        <Button text="%placeholder.dailyNote" onAction="#handleDailyNote"/>
+                    <HBox alignment="CENTER" spacing="10">
+                        <Button fx:id="newNotePlaceholderButton" onAction="#handleNewNote" text="%placeholder.newNote" />
+                        <Button fx:id="dailyNotePlaceholderButton" onAction="#handleDailyNote" text="%placeholder.dailyNote" />
                     </HBox>
                 </VBox>
 
-                <TabPane fx:id="notesTabPane"
-                         visible="false"
-                         tabClosingPolicy="ALL_TABS"/>
-
+                <TabPane fx:id="notesTabPane" tabClosingPolicy="ALL_TABS" visible="false" />
             </StackPane>
-
         </SplitPane>
     </center>
 
     <bottom>
-        <HBox spacing="10"
-              alignment="CENTER_LEFT"
-              style="-fx-padding: 5;">
-
-            <Label text="%app.name"/>
-
-            <Region HBox.hgrow="ALWAYS"/>
-
-            <Label fx:id="autoSaveLabel"
-                   text="%status.saved"
-                   visible="false"
-                   style="-fx-text-fill: green;"/>
+        <HBox alignment="CENTER_LEFT" spacing="10" style="-fx-padding: 5;">
+            <Label text="%app.name" />
+            <Region HBox.hgrow="ALWAYS" />
+            <Label fx:id="autoSaveLabel" style="-fx-text-fill: green;" text="%status.saved" visible="false" />
         </HBox>
     </bottom>
-
 </BorderPane>

@@ -72,7 +72,6 @@ public class FontSelectorDialog extends Dialog<FontSettings> {
 
         getDialogPane().getButtonTypes().addAll(applyButton, ButtonType.CANCEL);
 
-        // ===== RESULT =====
         setResultConverter(buttonType -> {
             if (buttonType == applyButton) {
                 return new FontSettings(
@@ -83,14 +82,12 @@ public class FontSelectorDialog extends Dialog<FontSettings> {
             return null;
         });
 
-        // ===== ТЕМА =====
         applyTheme(themeManager.getCurrentTheme());
 
         themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
             applyTheme(newTheme);
         });
 
-        // ===== ЯЗЫК =====
         LanguageManager.getInstance().localeProperty().addListener((obs, oldVal, newVal) -> {
             LanguageManager lmNew = LanguageManager.getInstance();
 
