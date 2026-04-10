@@ -9,6 +9,7 @@ import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
 import com.notegraph.util.MetadataManager;
 
+import javafx.geometry.Rectangle2D;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.animation.AnimationTimer;
@@ -29,6 +30,7 @@ import javafx.scene.layout.*;
 import javafx.scene.web.WebView;
 import javafx.scene.Scene;
 
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 
@@ -81,6 +83,9 @@ public class MainController {
 
     private double xOffset = 0;
     private double yOffset = 0;
+
+    private boolean isMaximized = false;
+    private double prevX, prevY, prevWidth, prevHeight;
 
     private static class SearchResult {
         Path notePath;
@@ -176,8 +181,32 @@ public class MainController {
 
     @FXML
     private void handleMaximize() {
-        Stage stage = (Stage) titleBar.getScene().getWindow();
-        stage.setMaximized(!stage.isMaximized());
+        Stage stage = (Stage) notesCountLabel.getScene().getWindow();
+        if (!isMaximized) {
+            // 🔥 сохраняем старые размеры
+            prevX = stage.getX();
+            prevY = stage.getY();
+            prevWidth = stage.getWidth();
+            prevHeight = stage.getHeight();
+
+            // 🔥 получаем рабочую область (БЕЗ панели задач)
+            Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
+
+            stage.setX(bounds.getMinX());
+            stage.setY(bounds.getMinY());
+            stage.setWidth(bounds.getWidth());
+            stage.setHeight(bounds.getHeight());
+
+            isMaximized = true;
+
+        } else {
+            stage.setX(prevX);
+            stage.setY(prevY);
+            stage.setWidth(prevWidth);
+            stage.setHeight(prevHeight);
+
+            isMaximized = false;
+        }
     }
 
     private void refreshAllUI() {
@@ -1043,49 +1072,48 @@ public class MainController {
         applyFontToContent(content);
         updateToggleButtonsStyle(content);
 
-        // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ПЕРЕИМЕНОВАНИЯ
         content.titleField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) {
                 String newTitle = content.titleField.getText().trim();
                 String oldTitle = content.note.getTitle();
 
-                if (!newTitle.equals(oldTitle) && !newTitle.isEmpty()) {
-                    try {
-                        Path oldPath = content.note.getPath();
-                        Path newPath = oldPath.getParent().resolve(newTitle + ".md");
-
-                        if (Files.exists(newPath)) {
-                            logger.warn("Файл уже существует");
-                            return;
-                        }
-
-                        Files.move(oldPath, newPath);
-
-                        // 🔥 ОБНОВЛЯЕМ МОДЕЛЬ
-                        content.note.setTitle(newTitle);
-                        content.note.setPath(newPath);
-
-                        // 🔥 ОБНОВЛЯЕМ TAB
-                        if (content.tab != null) {
-                            content.tab.setText(newTitle);
-                        }
-
-                        // 🔥 ОБНОВЛЯЕМ INDEX
-                        LinkIndexManager.getInstance().renameNote(oldTitle, newTitle);
-
-                        refreshTree();
-
-                    } catch (Exception e) {
-                        logger.error("Ошибка переименования", e);
+                if (newTitle.equals(oldTitle) || newTitle.isEmpty()) {
+                    if (newTitle.isEmpty()) {
+                        content.titleField.setText(oldTitle);
                     }
+                    return;
+                }
+
+                try {
+                    Path oldPath = content.note.getPath();
+                    Path newPath = oldPath.getParent().resolve(newTitle + ".md");
+
+                    if (Files.exists(newPath)) {
+                        content.titleField.setText(oldTitle);
+                        return;
+                    }
+
+                    Files.move(oldPath, newPath);
+
+                    content.note.setTitle(newTitle);
+                    content.note.setPath(newPath);
+
+                    if (content.tab != null) {
+                        content.tab.setText(newTitle);
+                    }
+
+                    LinkIndexManager.getInstance().renameNote(oldTitle, newTitle);
+                    refreshTree();
+
+                } catch (Exception e) {
+                    logger.error("Ошибка переименования", e);
+                    content.titleField.setText(oldTitle);
                 }
             }
         });
 
         return content;
     }
-
-
 
     private void updateToggleButtonsStyle(NoteTabContent content) {
 

@@ -179,7 +179,6 @@ public class FileSystemManager {
         String safeName = sanitizeFileName(name);
         Path folderPath = parentFolder.resolve(safeName);
 
-        // Если папка уже существует, добавляем числовой суффикс
         int counter = 1;
         while (Files.exists(folderPath)) {
             folderPath = parentFolder.resolve(safeName + " " + counter);

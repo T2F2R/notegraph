@@ -1,73 +1,382 @@
+/* Obsidian Dark Theme */
 .root {
-    -fx-base: #2b2b2b;
-    -fx-background-color: #2b2b2b;
-    -fx-control-inner-background: #3c3f41;
-    -fx-text-fill: #e8e8e8;
+    /* Основные цвета Obsidian Dark */
+    -theme-bg-primary: #1e1e2e;
+    -theme-bg-secondary: #181825;
+    -theme-bg-sidebar: #1a1a2a;
+    -theme-bg-hover: #313244;
+    -theme-bg-active: #45475a;
+
+    -theme-text-primary: #cdd6f4;
+    -theme-text-secondary: #a6adc8;
+    -theme-text-muted: #6c7086;
+
+    -theme-accent: #cba6f7;
+    -theme-accent-hover: #b4befe;
+    -theme-accent-light: #313244;
+
+    -theme-border: #313244;
+    -theme-border-light: #45475a;
+
+    -theme-shadow: rgba(0, 0, 0, 0.2);
+    -theme-shadow-hover: rgba(0, 0, 0, 0.3);
+
+    -fx-base: -theme-bg-primary;
+    -fx-background-color: -theme-bg-primary;
+    -fx-control-inner-background: -theme-bg-primary;
+    -fx-text-fill: -theme-text-primary;
+    -fx-font-family: "Inter", "System", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.label {
-    -fx-text-fill: #e8e8e8;
+/* Главное окно */
+.root, .border-pane {
+    -fx-background-color: -theme-bg-primary;
 }
 
-.button {
-    -fx-background-color: #3c3f41;
-    -fx-text-fill: #e8e8e8;
+/* Боковая панель (TreeView) */
+.split-pane {
+    -fx-background-color: transparent;
 }
 
+.split-pane-divider {
+    -fx-background-color: -theme-border;
+    -fx-padding: 0 1 0 1;
+}
+
+.vbox {
+    -fx-background-color: -theme-bg-sidebar;
+}
+
+/* TreeView стиль как в Obsidian Dark */
+.tree-view {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 8 0 8 0;
+}
+
+.tree-view .tree-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-font-size: 14px;
+    -fx-padding: 6 8 6 12;
+    -fx-border-width: 0;
+}
+
+.tree-view .tree-cell:hover {
+    -fx-background-color: -theme-bg-hover;
+    -fx-text-fill: -theme-text-primary;
+}
+
+.tree-view .tree-cell:selected {
+    -fx-background-color: -theme-accent-light;
+    -fx-text-fill: -theme-accent;
+    -fx-font-weight: 500;
+}
+
+.tree-view .tree-cell .tree-disclosure-node {
+    -fx-padding: 4;
+}
+
+.tree-view .tree-cell .tree-disclosure-node .arrow {
+    -fx-background-color: -theme-text-muted;
+    -fx-padding: 4;
+}
+
+.tree-view .tree-cell:expanded .tree-disclosure-node .arrow {
+    -fx-background-color: -theme-accent;
+}
+
+/* Счетчик заметок */
+#notesCountLabel {
+    -fx-text-fill: -theme-text-muted;
+    -fx-font-size: 12px;
+    -fx-padding: 0 8 0 0;
+}
+
+/* Стиль для заголовка "Заметки" */
+.hbox .label:first-child {
+    -fx-font-weight: 600;
+    -fx-text-fill: -theme-text-primary;
+    -fx-font-size: 13px;
+    -fx-letter-spacing: 0.5px;
+}
+
+/* TabPane стиль */
+.tab-pane {
+    -fx-background-color: transparent;
+    -fx-tab-min-width: 120px;
+}
+
+.tab-pane .tab-header-area {
+    -fx-padding: 0 0 8 0;
+    -fx-background-color: transparent;
+}
+
+.tab-pane .tab-header-background {
+    -fx-background-color: transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: -theme-border;
+}
+
+.tab-pane .tab {
+    -fx-background-color: transparent;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: transparent;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: -theme-text-secondary;
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: -theme-accent;
+}
+
+.tab-pane .tab-close-button {
+    -fx-background-color: -theme-text-muted;
+    -fx-padding: 2;
+}
+
+.tab-pane .tab-close-button:hover {
+    -fx-background-color: -theme-accent;
+}
+
+/* Контентная область */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+}
+
+.scroll-bar:vertical .thumb {
+    -fx-background-color: -theme-border;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar:vertical .thumb:hover {
+    -fx-background-color: -theme-text-muted;
+}
+
+/* Поле ввода заголовка */
+.text-field {
+    -fx-background-color: transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-border-color: -theme-border;
+    -fx-font-size: 28px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -theme-text-primary;
+    -fx-padding: 12 0 8 0;
+    -fx-font-family: "Inter", "System", sans-serif;
+}
+
+.text-field:focused {
+    -fx-border-color: -theme-accent;
+}
+
+/* Область содержимого */
+.text-area {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-font-size: 15px;
+    -fx-line-spacing: 4;
+}
+
+.text-area .content {
+    -fx-background-color: transparent;
+}
+
+.text-area:focused {
+    -fx-border-width: 0;
+}
+
+/* Кнопки тулбара */
+.button, .toggle-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-padding: 6 12 6 12;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+}
+
+.button:hover, .toggle-button:hover {
+    -fx-background-color: -theme-bg-hover;
+    -fx-text-fill: -theme-text-primary;
+}
+
+.button:pressed, .toggle-button:pressed {
+    -fx-background-color: -theme-bg-active;
+}
+
+.toggle-button:selected {
+    -fx-background-color: -theme-accent-light;
+    -fx-text-fill: -theme-accent;
+}
+
+/* Кнопки в тулбаре */
+.tool-bar {
+    -fx-background-color: transparent;
+    -fx-padding: 8 12;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: -theme-border;
+}
+
+.tool-bar .button {
+    -fx-padding: 6;
+    -fx-min-width: 32;
+    -fx-min-height: 32;
+}
+
+.tool-bar .button .image-view {
+    -fx-fit-width: 16;
+    -fx-fit-height: 16;
+}
+
+/* Поисковая строка */
+#searchField {
+    -fx-background-color: -theme-bg-secondary;
+    -fx-border-width: 1;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 6 12 6 12;
+    -fx-font-size: 13px;
+}
+
+#searchField:focused {
+    -fx-border-color: -theme-accent;
+    -fx-background-color: -theme-bg-primary;
+}
+
+/* Выпадающий список */
 .combo-box {
-    -fx-background-color: #3c3f41;
-    -fx-text-fill: #e8e8e8;
+    -fx-background-color: -theme-bg-secondary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
 }
 
 .combo-box .list-cell {
-    -fx-background-color: #3c3f41;
-    -fx-text-fill: #e8e8e8;
+    -fx-text-fill: -theme-text-primary;
+    -fx-padding: 6 12;
 }
 
 .combo-box-popup .list-view {
-    -fx-background-color: #3c3f41;
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 6;
 }
 
-.spinner {
-    -fx-background-color: #3c3f41;
+.combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: -theme-bg-hover;
 }
 
-.text-field {
-    -fx-background-color: #3c3f41;
-    -fx-text-fill: #e8e8e8;
+/* Плейсхолдер */
+#placeholderPane {
+    -fx-background-color: -theme-bg-primary;
 }
 
+#placeholderPane .label {
+    -fx-text-fill: -theme-text-muted;
+    -fx-font-size: 16px;
+}
+
+#placeholderPane .button {
+    -fx-background-color: -theme-accent;
+    -fx-text-fill: #1e1e2e;
+    -fx-padding: 8 20;
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+}
+
+#placeholderPane .button:hover {
+    -fx-background-color: -theme-accent-hover;
+}
+
+/* Меню бар */
+.menu-bar {
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: -theme-border;
+    -fx-padding: 0;
+}
+
+.menu {
+    -fx-padding: 6 12;
+}
+
+.menu .label {
+    -fx-text-fill: -theme-text-secondary;
+    -fx-font-size: 13px;
+}
+
+.menu:hover {
+    -fx-background-color: -theme-bg-hover;
+}
+
+.menu-item {
+    -fx-padding: 6 12;
+}
+
+.menu-item .label {
+    -fx-text-fill: -theme-text-primary;
+    -fx-font-size: 13px;
+}
+
+.menu-item:hover {
+    -fx-background-color: -theme-bg-hover;
+}
+
+/* Диалоги */
 .dialog-pane {
-    -fx-background-color: #2b2b2b;
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
 }
 
 .dialog-pane .header-panel {
-    -fx-background-color: #3c3f41;
+    -fx-background-color: -theme-bg-secondary;
+    -fx-border-radius: 12 12 0 0;
 }
 
 .dialog-pane .content.label {
-    -fx-text-fill: #e8e8e8;
+    -fx-text-fill: -theme-text-primary;
+    -fx-font-size: 14px;
 }
 
-.note-dark {
-    -fx-background-color: #2b2b2b;
+.dialog-pane .button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-accent;
+    -fx-font-weight: 600;
 }
 
-.note-light {
-    -fx-background-color: #ffffff;
+.dialog-pane .button:hover {
+    -fx-background-color: -theme-bg-hover;
 }
 
+/* Стили для модов редактора */
 .btn-active {
-    -fx-background-color: #4a90e2;
-    -fx-text-fill: white;
+    -fx-background-color: -theme-accent;
+    -fx-text-fill: #1e1e2e;
 }
 
 .btn-inactive {
-    -fx-background-color: #3c3f41;
-    -fx-text-fill: #cccccc;
-}
-
-.root {
-    -fx-font-family: "System";
-    -fx-font-size: 14px;
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-secondary;
 }

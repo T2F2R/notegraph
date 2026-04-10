@@ -1,29 +1,93 @@
+/* Общие стили для NoteGraph в стиле Obsidian */
+
 .root {
-    -fx-font-family: "System";
-    -fx-font-size: 14px;
+    -fx-font-family: "Inter", "System", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -fx-font-smoothing-type: gray;
 }
 
-/* Заголовки */
-.text-field {
-    -fx-font-size: 16px;
+/* Плавные анимации */
+.button, .toggle-button, .tree-cell, .menu-item {
+    -fx-transition: all 0.2s ease;
 }
 
-/* Текстовые области */
-.text-area {
-    -fx-font-size: 14px;
+/* Скругленные углы для всех компонентов */
+.dialog-pane, .combo-box, .text-field, .button {
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
 }
 
-/* Кнопки */
-.button, .toggle-button {
+/* Улучшенные скроллбары */
+.scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 10;
+}
+
+.scroll-bar .thumb {
+    -fx-background-radius: 5;
+}
+
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+/* Стили для WebView (просмотр Markdown) */
+.web-view {
+    -fx-background-color: transparent;
+}
+
+/* Tooltips */
+.tooltip {
+    -fx-background-color: -theme-bg-secondary;
+    -fx-text-fill: -theme-text-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10;
+    -fx-font-size: 12px;
+}
+
+/* Разделители */
+.separator .line {
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1;
+}
+
+/* Стили для статусной строки */
+#autoSaveLabel {
+    -fx-font-size: 12px;
+    -fx-padding: 0 8;
+}
+
+/* Контекстное меню */
+.context-menu {
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 6 0;
+    -fx-effect: dropshadow(gaussian, -theme-shadow, 8, 0, 0, 2);
+}
+
+.context-menu .menu-item {
+    -fx-padding: 6 20;
+}
+
+.context-menu .menu-item .label {
     -fx-font-size: 13px;
 }
 
-/* TreeView */
-.tree-cell {
-    -fx-font-size: 13px;
+/* Акцентные элементы */
+.accent-text {
+    -fx-fill: -theme-accent;
 }
 
-/* Labels */
-.label {
-    -fx-font-size: 13px;
+/* Кнопки действий */
+.action-button {
+    -fx-background-color: -theme-accent;
+    -fx-text-fill: white;
+}
+
+.action-button:hover {
+    -fx-background-color: -theme-accent-hover;
 }
