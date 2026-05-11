@@ -9,7 +9,9 @@ import com.notegraph.util.LinkIndexManager;
 import com.notegraph.util.MarkdownRenderer;
 import com.notegraph.util.MetadataManager;
 
+import javafx.animation.PauseTransition;
 import javafx.geometry.Rectangle2D;
+import javafx.geometry.Side;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.animation.AnimationTimer;
@@ -26,12 +28,14 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.web.WebView;
 import javafx.scene.Scene;
 
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import netscape.javascript.JSObject;
 
 import org.slf4j.Logger;
@@ -44,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Главный контроллер приложения NoteGraph.
@@ -57,7 +62,6 @@ public class MainController {
     private final FileSystemManager fsManager = FileSystemManager.getInstance();
     private final MetadataManager metadataManager = MetadataManager.getInstance();
     private final LinkIndexManager linkIndexManager = LinkIndexManager.getInstance();
-    private GraphViewController graphController;
 
     @FXML private Label notesCountLabel;
     @FXML private ComboBox<String> sortComboBox;
@@ -167,10 +171,20 @@ public class MainController {
             applyGlobalFont();
             refreshAllUI();
         });
+        Platform.runLater(() -> {
+            Scene scene = notesTreeView.getScene();
+            if (scene != null && scene.getWindow() != null) {
+                Stage stage = (Stage) scene.getWindow();
+                stage.setOnCloseRequest(event -> {
+                    shutdown();
+                });
+            }
+        });
     }
 
     @FXML
     private void handleClose() {
+        shutdown();
         ((Stage) titleBar.getScene().getWindow()).close();
     }
 
@@ -183,13 +197,11 @@ public class MainController {
     private void handleMaximize() {
         Stage stage = (Stage) notesCountLabel.getScene().getWindow();
         if (!isMaximized) {
-            // 🔥 сохраняем старые размеры
             prevX = stage.getX();
             prevY = stage.getY();
             prevWidth = stage.getWidth();
             prevHeight = stage.getHeight();
 
-            // 🔥 получаем рабочую область (БЕЗ панели задач)
             Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
 
             stage.setX(bounds.getMinX());
@@ -971,6 +983,8 @@ public class MainController {
 
         content.editModeButton.setTooltip(new Tooltip(lm.get("button.edit")));
         content.previewModeButton.setTooltip(new Tooltip(lm.get("button.view")));
+        content.editModeButton.setId("editButton");
+        content.previewModeButton.setId("viewButton");
 
         ImageView editIcon = new ImageView(
                 new Image(getClass().getResourceAsStream("/icons/edit.png"))
@@ -1015,17 +1029,44 @@ public class MainController {
         content.contentTextArea.setWrapText(true);
         VBox.setVgrow(content.contentTextArea, Priority.ALWAYS);
 
-        // 🔥 Обновление preview
-        content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (content.previewScrollPane.isVisible()) {
-                updatePreview(content);
-            }
-        });
+        setupBracketAutoComplete(content);
+        setupAutoComplete(content);
+
+        // 🔥 АВТОСОХРАНЕНИЕ ПРИ ИЗМЕНЕНИИ ТЕКСТА
+        final long[] lastSaveTime = {System.currentTimeMillis()};
 
         content.contentTextArea.textProperty().addListener((obs, oldVal, newVal) -> {
+            lastSaveTime[0] = System.currentTimeMillis();
+
+            // Обновляем превью если нужно
             if (content.previewScrollPane.isVisible()) {
                 updatePreview(content);
             }
+
+            // Отложенное сохранение через 1 секунду после последнего изменения
+            Platform.runLater(() -> {
+                if (System.currentTimeMillis() - lastSaveTime[0] >= 1000) {
+                    saveNoteContent(content);
+                    showAutoSaveIndicator(true);
+                }
+            });
+        });
+
+        content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
+            lastSaveTime[0] = System.currentTimeMillis();
+
+            // Обновляем превью если нужно
+            if (content.previewScrollPane.isVisible()) {
+                updatePreview(content);
+            }
+
+            // Отложенное сохранение через 1 секунду после последнего изменения
+            Platform.runLater(() -> {
+                if (System.currentTimeMillis() - lastSaveTime[0] >= 1000) {
+                    saveNoteContent(content);
+                    showAutoSaveIndicator(true);
+                }
+            });
         });
 
         content.editArea.getChildren().addAll(content.titleField, content.contentTextArea);
@@ -1085,6 +1126,9 @@ public class MainController {
                 }
 
                 try {
+                    // Сохраняем содержимое перед переименованием
+                    saveNoteContent(content);
+
                     Path oldPath = content.note.getPath();
                     Path newPath = oldPath.getParent().resolve(newTitle + ".md");
 
@@ -1113,6 +1157,295 @@ public class MainController {
         });
 
         return content;
+    }
+
+    private void showAutoSaveIndicator(boolean success) {
+        Platform.runLater(() -> {
+            if (autoSaveLabel != null) {
+                if (success) {
+                    autoSaveLabel.setText(LanguageManager.getInstance().get("status.saved"));
+                    autoSaveLabel.setStyle("-fx-text-fill: green;");
+                } else {
+                    autoSaveLabel.setText(LanguageManager.getInstance().get("status.error"));
+                    autoSaveLabel.setStyle("-fx-text-fill: red;");
+                }
+                autoSaveLabel.setVisible(true);
+
+                // Скрываем через 2 секунды
+                PauseTransition delay = new PauseTransition(Duration.seconds(2));
+                delay.setOnFinished(e -> autoSaveLabel.setVisible(false));
+                delay.play();
+            }
+        });
+    }
+
+    // Метод для автозамены [[ на [[]] с правильной позицией курсора
+    private void setupBracketAutoComplete(NoteTabContent content) {
+        TextArea textArea = content.contentTextArea;
+
+        textArea.addEventFilter(KeyEvent.KEY_TYPED, event -> {
+            if ("[".equals(event.getCharacter())) {
+                int caretPos = textArea.getCaretPosition();
+                String text = textArea.getText();
+
+                // Проверяем, что вводится вторая скобка
+                if (caretPos > 0 && caretPos <= text.length() && text.charAt(caretPos - 1) == '[') {
+                    event.consume(); // Отменяем ввод второй скобки
+
+                    Platform.runLater(() -> {
+                        try {
+                            int currentPos = textArea.getCaretPosition();
+                            String currentText = textArea.getText();
+
+                            if (currentPos > 0 && currentPos <= currentText.length() &&
+                                    currentText.charAt(currentPos - 1) == '[') {
+
+                                // Удаляем первую скобку
+                                textArea.deleteText(currentPos - 1, currentPos);
+                                // Вставляем полную конструкцию
+                                textArea.insertText(currentPos - 1, "[[]]");
+                                // Устанавливаем курсор между скобками (позиция currentPos + 1)
+                                textArea.positionCaret(currentPos + 1);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void setupAutoComplete(NoteTabContent content) {
+        TextArea textArea = content.contentTextArea;
+        ContextMenu suggestionsMenu = new ContextMenu();
+
+        textArea.textProperty().addListener((obs, oldText, newText) -> {
+            // Безопасная проверка
+            if (newText == null || newText.isEmpty()) {
+                suggestionsMenu.hide();
+                return;
+            }
+
+            int caretPos = textArea.getCaretPosition();
+
+            // Защита от выхода за границы
+            if (caretPos < 0 || caretPos > newText.length()) {
+                suggestionsMenu.hide();
+                return;
+            }
+
+            if (caretPos < 2) {
+                suggestionsMenu.hide();
+                return;
+            }
+
+            try {
+                // Ищем [[ перед курсором
+                int openPos = -1;
+                for (int i = Math.min(caretPos - 1, newText.length() - 1); i >= 0; i--) {
+                    if (i > 0 && i - 1 < newText.length() && i < newText.length()) {
+                        if (newText.charAt(i - 1) == '[' && newText.charAt(i) == '[') {
+                            openPos = i - 1;
+                            break;
+                        }
+                    }
+                }
+
+                // Если нет [[ перед курсором - скрываем
+                if (openPos == -1) {
+                    suggestionsMenu.hide();
+                    return;
+                }
+
+                // Ищем ]] после [[
+                int closePos = -1;
+                for (int i = openPos + 2; i < newText.length() - 1; i++) {
+                    if (i + 1 < newText.length()) {
+                        if (newText.charAt(i) == ']' && newText.charAt(i + 1) == ']') {
+                            closePos = i;
+                            break;
+                        }
+                    }
+                }
+
+                // Если есть ]] и курсор после них - скрываем подсказки
+                if (closePos != -1 && caretPos > closePos + 1) {
+                    suggestionsMenu.hide();
+                    return;
+                }
+
+                // Показываем подсказки
+                if (caretPos > openPos + 1) {
+                    int inputStart = openPos + 2;
+
+                    // Защита от выхода за границы
+                    if (inputStart >= newText.length()) {
+                        suggestionsMenu.hide();
+                        return;
+                    }
+
+                    String currentInput = "";
+                    if (caretPos > inputStart) {
+                        int endPos = Math.min(caretPos, newText.length());
+                        if (closePos != -1) {
+                            endPos = Math.min(endPos, closePos);
+                        }
+                        if (inputStart < endPos && inputStart < newText.length() && endPos <= newText.length()) {
+                            currentInput = newText.substring(inputStart, endPos);
+                        }
+                    }
+
+                    List<String> suggestions = getNoteSuggestions(currentInput);
+
+                    if (!suggestions.isEmpty()) {
+                        suggestionsMenu.getItems().clear();
+
+                        for (String suggestion : suggestions) {
+                            MenuItem item = new MenuItem(suggestion);
+                            item.setOnAction(e -> {
+                                try {
+                                    String currentText = textArea.getText();
+                                    int currentPos = textArea.getCaretPosition();
+
+                                    if (currentText == null || currentText.isEmpty()) {
+                                        suggestionsMenu.hide();
+                                        return;
+                                    }
+
+                                    if (currentPos < 0 || currentPos > currentText.length()) {
+                                        suggestionsMenu.hide();
+                                        return;
+                                    }
+
+                                    // Находим позицию [[
+                                    int startPos = -1;
+                                    for (int i = Math.min(currentPos - 1, currentText.length() - 1); i >= 0; i--) {
+                                        if (i > 0 && i - 1 < currentText.length() && i < currentText.length()) {
+                                            if (currentText.charAt(i - 1) == '[' && currentText.charAt(i) == '[') {
+                                                startPos = i - 1;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (startPos != -1) {
+                                        int insertPos = startPos + 2;
+
+                                        if (insertPos >= 0 && insertPos <= currentText.length()) {
+                                            // Проверяем, есть ли уже ]] после курсора
+                                            boolean hasClosingAfter = false;
+                                            for (int i = currentPos; i < currentText.length() - 1; i++) {
+                                                if (i + 1 < currentText.length() &&
+                                                        currentText.charAt(i) == ']' &&
+                                                        currentText.charAt(i + 1) == ']') {
+                                                    hasClosingAfter = true;
+                                                    break;
+                                                }
+                                            }
+
+                                            String newText2;
+                                            if (hasClosingAfter) {
+                                                newText2 = currentText.substring(0, insertPos) +
+                                                        suggestion +
+                                                        (currentPos < currentText.length() ? currentText.substring(currentPos) : "");
+                                            } else {
+                                                newText2 = currentText.substring(0, insertPos) +
+                                                        suggestion +
+                                                        "]]" +
+                                                        (currentPos < currentText.length() ? currentText.substring(currentPos) : "");
+                                            }
+
+                                            textArea.setText(newText2);
+                                            int newCaretPos = insertPos + suggestion.length();
+                                            if (newCaretPos >= 0 && newCaretPos <= newText2.length()) {
+                                                textArea.positionCaret(newCaretPos);
+                                            }
+                                        }
+                                    }
+                                    suggestionsMenu.hide();
+                                } catch (Exception ex) {
+                                    suggestionsMenu.hide();
+                                }
+                            });
+                            suggestionsMenu.getItems().add(item);
+                        }
+
+                        if (!suggestionsMenu.isShowing()) {
+                            try {
+                                suggestionsMenu.show(textArea, Side.BOTTOM, 0, 0);
+                            } catch (Exception e) {
+                                // Игнорируем ошибки показа меню
+                            }
+                        }
+                    } else {
+                        suggestionsMenu.hide();
+                    }
+                } else {
+                    suggestionsMenu.hide();
+                }
+            } catch (Exception e) {
+                suggestionsMenu.hide();
+            }
+        });
+
+        textArea.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal) {
+                suggestionsMenu.hide();
+            }
+        });
+    }
+
+    private List<String> getNoteSuggestions(String currentInput) {
+        List<String> allNotes = getAllNoteTitles();
+
+        if (allNotes.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        if (currentInput == null || currentInput.isEmpty()) {
+            return allNotes.stream().limit(5).collect(Collectors.toList());
+        }
+
+        return allNotes.stream()
+                .filter(note -> note != null && note.toLowerCase().startsWith(currentInput.toLowerCase()))
+                .limit(5)
+                .collect(Collectors.toList());
+    }
+
+    private List<String> getAllNoteTitles() {
+        List<String> titles = new ArrayList<>();
+        try {
+            TreeItem<Path> root = notesTreeView.getRoot();
+            if (root != null) {
+                collectAllNoteTitles(root, titles);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return titles;
+    }
+
+    private void collectAllNoteTitles(TreeItem<Path> item, List<String> titles) {
+        if (item == null || item.getValue() == null) return;
+
+        try {
+            Path path = item.getValue();
+            if (fsManager.isNote(path)) {
+                String title = path.getFileName().toString().replace(".md", "");
+                if (title != null && !title.isEmpty()) {
+                    titles.add(title);
+                }
+            }
+
+            if (item.getChildren() != null) {
+                for (TreeItem<Path> child : item.getChildren()) {
+                    collectAllNoteTitles(child, titles);
+                }
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
     }
 
     private void updateToggleButtonsStyle(NoteTabContent content) {

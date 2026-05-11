@@ -23,7 +23,6 @@
     </properties>
 
     <dependencies>
-        <!-- JavaFX модули (без дубликатов) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -39,8 +38,6 @@
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-
-        <!-- Markdown парсеры -->
         <dependency>
             <groupId>com.vladsch.flexmark</groupId>
             <artifactId>flexmark-all</artifactId>
@@ -61,8 +58,6 @@
             <artifactId>commonmark-ext-autolink</artifactId>
             <version>0.22.0</version>
         </dependency>
-
-        <!-- JSON и логирование -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
@@ -78,16 +73,12 @@
             <artifactId>logback-classic</artifactId>
             <version>1.4.14</version>
         </dependency>
-
-        <!-- Тестовые зависимости -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
-
-        <!-- Явно добавляем platform launcher для надежности -->
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>
@@ -106,6 +97,11 @@
             <artifactId>testfx-junit5</artifactId>
             <version>${testfx.version}</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.controlsfx</groupId>
+            <artifactId>controlsfx</artifactId>
+            <version>11.1.2</version>
         </dependency>
     </dependencies>
 

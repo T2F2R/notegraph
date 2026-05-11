@@ -91,3 +91,31 @@
 .action-button:hover {
     -fx-background-color: -theme-accent-hover;
 }
+
+.suggestions-list {
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.suggestions-list .list-cell {
+    -fx-padding: 8 12;
+    -fx-text-fill: -theme-text-primary;
+}
+
+.suggestions-list .list-cell:hover {
+    -fx-background-color: -theme-bg-hover;
+}
+
+.suggestions-list .list-cell:selected {
+    -fx-background-color: -theme-accent-light;
+    -fx-text-fill: -theme-accent;
+}
+
+.popover {
+    -fx-background-color: -theme-bg-primary;
+    -fx-border-color: -theme-border;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
