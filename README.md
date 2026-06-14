@@ -71,7 +71,7 @@
 ### Сборка из исходников
 
 ```bash
-git clone https://github.com/<username>/notegraph.git
+git clone https://github.com/T2F2R/notegraph
 cd notegraph
 mvn clean package
 ```
