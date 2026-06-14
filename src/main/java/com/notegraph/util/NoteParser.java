@@ -24,7 +24,7 @@ public class NoteParser {
         "^---\\s*\\n(.*?)\\n---\\s*\\n(.*)$",
         Pattern.DOTALL
     );
-    
+
     /**
      * Прочитать заметку из файла
      */
@@ -175,9 +175,9 @@ public class NoteParser {
 
         if (fm.containsKey("tags")) {
             Object tagsObj = fm.get("tags");
-            if (tagsObj instanceof List) {
-                List<String> tags = new ArrayList<>();
-                for (Object tag : (List<?>) tagsObj) {
+            if (tagsObj instanceof Set) {
+                Set<String> tags = new HashSet<>();
+                for (Object tag : (Set<?>) tagsObj) {
                     tags.add(tag.toString());
                 }
                 note.setTags(tags);

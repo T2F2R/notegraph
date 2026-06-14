@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>NoteGraph</name>
-    <description>Система управления персональной базой знаний (File System)</description>
+    <description>Система управления персональной базой знаний</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -102,6 +102,12 @@
             <groupId>org.controlsfx</groupId>
             <artifactId>controlsfx</artifactId>
             <version>11.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>4.2.0</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

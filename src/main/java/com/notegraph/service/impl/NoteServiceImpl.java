@@ -6,6 +6,7 @@ import com.notegraph.repository.impl.FileSystemNoteRepository;
 import com.notegraph.service.NoteService;
 import com.notegraph.util.FileSystemManager;
 import com.notegraph.util.LinkIndexManager;
+import com.notegraph.util.TagIndexManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,13 +16,15 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Реализация сервиса для работы с заметками (файловая система).
+ * Реализация сервиса для работы с заметками.
  */
 public class NoteServiceImpl implements NoteService {
     private static final Logger logger = LoggerFactory.getLogger(NoteServiceImpl.class);
 
     private final FileSystemNoteRepository noteRepository;
     private final LinkIndexManager linkIndexManager;
+    private final TagIndexManager tagIndexManager =
+            TagIndexManager.getInstance();
     private final FileSystemManager fsManager;
 
     public NoteServiceImpl() {
@@ -42,40 +45,62 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     public Note createNote(String title, String content) {
+
         validateTitle(title);
 
         if (noteRepository.findByTitle(title).isPresent()) {
-            throw new IllegalArgumentException("Заметка с таким заголовком уже существует: " + title);
+            throw new IllegalArgumentException(
+                    "Заметка с таким заголовком уже существует: "
+                            + title
+            );
         }
 
-        Note note = new Note(title, content != null ? content : "");
-        note.setBodyContent(content != null ? content : "");
+        Note note = new Note(
+                title,
+                content != null ? content : ""
+        );
+
+        note.setBodyContent(
+                content != null ? content : ""
+        );
 
         note.extractOutgoingLinks();
+        note.extractTags();
 
         note = noteRepository.create(note);
 
         linkIndexManager.updateNoteLinks(note);
+        tagIndexManager.updateNoteTags(note);
 
         logger.info("Создана заметка: {}", title);
+
         return note;
     }
 
     @Override
     public Note updateNote(Note note) {
+
         if (note == null) {
-            throw new IllegalArgumentException("Заметка не может быть null");
+            throw new IllegalArgumentException(
+                    "Заметка не может быть null"
+            );
         }
-        
+
         validateTitle(note.getTitle());
 
         note.extractOutgoingLinks();
+        note.extractTags();
 
         note = noteRepository.update(note);
 
         linkIndexManager.updateNoteLinks(note);
-        
-        logger.info("Обновлена заметка: {}", note.getTitle());
+        tagIndexManager.updateNoteTags(note);
+
+        logger.info(
+                "Обновлена заметка: {}",
+                note.getTitle()
+        );
+
         return note;
     }
 
@@ -106,21 +131,30 @@ public class NoteServiceImpl implements NoteService {
     public void deleteNote(Integer id) {
         logger.warn("deleteNote(Integer) вызван, но не поддерживается");
     }
-    
-    /**
-     * Удалить заметку по объекту Note
-     */
+
     public void deleteNote(Note note) {
+
         if (note == null || note.getPath() == null) {
-            logger.warn("Попытка удалить заметку с null путем");
+            logger.warn(
+                    "Попытка удалить заметку с null путем"
+            );
             return;
         }
 
-        linkIndexManager.removeNote(note.getTitle());
+        linkIndexManager.removeNote(
+                note.getTitle()
+        );
+
+        tagIndexManager.removeNote(
+                note.getTitle()
+        );
 
         noteRepository.delete(note);
-        
-        logger.info("Удалена заметка: {}", note.getTitle());
+
+        logger.info(
+                "Удалена заметка: {}",
+                note.getTitle()
+        );
     }
     
     /**
@@ -166,18 +200,55 @@ public class NoteServiceImpl implements NoteService {
         }
     }
 
-    public Note createNoteInDirectory(String title, String content, Path directory) {
+    public Note createNoteInDirectory(
+            String title,
+            String content,
+            Path directory
+    ) {
+
         validateTitle(title);
 
         if (noteRepository.findByTitle(title).isPresent()) {
-            throw new IllegalArgumentException("Заметка уже существует: " + title);
+            throw new IllegalArgumentException(
+                    "Заметка уже существует: "
+                            + title
+            );
         }
 
-        Note note = fsManager.createNote(title, content, directory);
+        Note note = fsManager.createNote(
+                title,
+                content,
+                directory
+        );
 
         note.extractOutgoingLinks();
+        note.extractTags();
+
         linkIndexManager.updateNoteLinks(note);
+        tagIndexManager.updateNoteTags(note);
 
         return note;
+    }
+
+    /**
+     * Полностью перестроить индекс тегов.
+     */
+    public void rebuildTagIndex() {
+
+        tagIndexManager.clear();
+
+        List<Note> notes = getAllNotes();
+
+        for (Note note : notes) {
+
+            note.extractTags();
+
+            tagIndexManager.updateNoteTags(note);
+        }
+
+        logger.info(
+                "Переиндексация тегов завершена. Обработано {} заметок",
+                notes.size()
+        );
     }
 }

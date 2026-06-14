@@ -12,6 +12,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testfx.api.FxRobot;
 import org.testfx.framework.junit5.ApplicationTest;
 
+import java.time.Duration;
+
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -31,42 +34,40 @@ public class LinksTest extends ApplicationTest {
 
     @Test
     @Order(1)
-    //Проверка создания ссылок на другие заметки
     void testCreateNewLink() {
-
-        //Кликаем по кнопке "Новая заметка"
+        // Клик по кнопке "Новая заметка"
         robot.clickOn("#newNoteButton");
 
-        //Кликаем по полю для ввода названия заметки
+        // Клик по полю для ввода названия заметки
         robot.clickOn("#titleField");
 
-        //Выделяем все содержимое
+        // Выделяем все содержимое
         robot.press(KeyCode.CONTROL)
                 .press(KeyCode.A)
                 .release(KeyCode.A)
                 .release(KeyCode.CONTROL);
 
-        //Удаляем все содержимое
+        // Удаляем все содержимое
         robot.press(KeyCode.DELETE)
                 .release(KeyCode.DELETE);
 
-        //Вводим название
+        // Вводим название
         robot.write(noteTitle);
 
-        //Кликаем по полю для ввода содержимого заметки
+        // Клик по полю для ввода содержимого заметки
         robot.clickOn("#editArea");
 
-        //Вводим "[[Ссылка]]", это синтаксис для создания ссылки в режиме просмотра
+        // Вводим "[[Ссылка]]"
         robot.write(noteText);
 
-        //Кликаем по кнопке "Просмотр" для перехода из режима редактирования в режим просмотра
+        // Клик по кнопке "Просмотр"
         robot.clickOn("#viewButton");
 
-        //Находим WebView, это и есть режим просмотра, там наша ссылка рендерится
+        // Находим WebView
         WebView webView = robot.lookup(".web-view").queryAs(WebView.class);
         WebEngine engine = webView.getEngine();
 
-        //Кликаем по ссылке с помощью JavaScript
+        // Кликаем по ссылке через JavaScript
         Platform.runLater(() -> {
             engine.executeScript(
                     "var links = document.querySelectorAll('a');" +
@@ -79,16 +80,16 @@ public class LinksTest extends ApplicationTest {
             );
         });
 
-        //Ждем создания заметки
-        robot.sleep(300);
-
-        //Проверяем, создалась ли заметка с названием ссылки
-        boolean exists = robot.lookup(".tree-cell")
-                .queryAll()
-                .stream()
-                .filter(node -> node instanceof TreeCell)
-                .map(node -> ((TreeCell<?>) node).getText())
-                .anyMatch(text -> newNoteTitle.equals(text));
-        assertTrue(exists, "Заметка '" + newNoteTitle + "' не найдена");
+        await().atMost(Duration.ofSeconds(2))
+                .pollInterval(Duration.ofMillis(100))
+                .untilAsserted(() -> {
+                    boolean exists = robot.lookup(".tree-cell")
+                            .queryAll()
+                            .stream()
+                            .filter(node -> node instanceof TreeCell)
+                            .map(node -> ((TreeCell<?>) node).getText())
+                            .anyMatch(text -> newNoteTitle.equals(text));
+                    assertTrue(exists, "Заметка '" + newNoteTitle + "' не найдена");
+                });
     }
 }

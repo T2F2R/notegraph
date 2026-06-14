@@ -4,10 +4,7 @@ import com.notegraph.graph.*;
 import com.notegraph.model.Note;
 import com.notegraph.service.impl.NoteServiceImpl;
 import com.notegraph.ui.*;
-import com.notegraph.util.FileSystemManager;
-import com.notegraph.util.LinkIndexManager;
-import com.notegraph.util.MarkdownRenderer;
-import com.notegraph.util.MetadataManager;
+import com.notegraph.util.*;
 
 import javafx.animation.PauseTransition;
 import javafx.geometry.Rectangle2D;
@@ -62,6 +59,7 @@ public class MainController {
     private final FileSystemManager fsManager = FileSystemManager.getInstance();
     private final MetadataManager metadataManager = MetadataManager.getInstance();
     private final LinkIndexManager linkIndexManager = LinkIndexManager.getInstance();
+    private final FileWatcherService fileWatcher = FileWatcherService.getInstance();
 
     @FXML private Label notesCountLabel;
     @FXML private ComboBox<String> sortComboBox;
@@ -73,9 +71,10 @@ public class MainController {
     @FXML private BorderPane rootPane;
     @FXML private HBox titleBar;
 
+    private String currentSearchQuery = "";
+
     private final Map<Path, Tab> openTabs = new HashMap<>();
     private Timer autoSaveTimer;
-    private String currentSearchQuery = "";
     private Path cutPath = null;
 
     private ListView<SearchResult> searchResultsList;
@@ -180,6 +179,10 @@ public class MainController {
                 });
             }
         });
+        fileWatcher.setOnChangeListener(changeSet -> {
+            Platform.runLater(() -> handleExternalFileChanges(changeSet));
+        });
+        fileWatcher.start();
     }
 
     @FXML
@@ -278,43 +281,114 @@ public class MainController {
         }).start();
     }
 
-    private void setupFontListeners() {
-        fontManager.fontFamilyProperty().addListener((obs, oldVal, newVal) -> {
-            applyTheme(themeManager.getCurrentTheme());
-            saveFontToMetadata();
-            refreshAllPreviews();
-        });
+    /**
+     * Вызывается при обнаружении изменений в каталоге vault,
+     * сделанных вне приложения (другой редактор, синхронизация и т.п.).
+     * Выполняется в FX-потоке.
+     */
+    private void handleExternalFileChanges(FileWatcherService.FileChangeSet changeSet) {
+        if (changeSet.isEmpty()) {
+            return;
+        }
 
-        fontManager.fontSizeProperty().addListener((obs, oldVal, newVal) -> {
-            applyTheme(themeManager.getCurrentTheme());
-            saveFontToMetadata();
-            refreshAllPreviews();
-        });
-    }
+        logger.info("Обнаружены внешние изменения: добавлено={}, изменено={}, удалено={}",
+                changeSet.added.size(), changeSet.modified.size(), changeSet.removed.size());
 
-    private void saveFontToMetadata() {
-        MetadataManager metadata = MetadataManager.getInstance();
+        // 5.1. Структурные изменения (новые/удалённые файлы) — обновляем дерево и счётчик
+        if (!changeSet.added.isEmpty() || !changeSet.removed.isEmpty()) {
+            refreshTree();
+            updateNotesCount();
+        }
 
-        metadata.setPreference("fontFamily", fontManager.getCurrentFontFamily());
-        metadata.setPreference("fontSize", String.valueOf(fontManager.getCurrentFontSize()));
-    }
-
-    private void refreshAllPreviews() {
-        for (Tab tab : notesTabPane.getTabs()) {
-            if (tab.getUserData() instanceof NoteTabContent content) {
-                if (content.previewScrollPane != null && content.previewScrollPane.isVisible()) {
-                    updatePreview(content);
-                }
+        // 5.2. Удалённые заметки — закрываем соответствующие вкладки, если открыты
+        for (Path removedPath : changeSet.removed) {
+            Tab tab = openTabs.get(removedPath);
+            if (tab != null) {
+                notesTabPane.getTabs().remove(tab);
+                openTabs.remove(removedPath);
+                logger.info("Закрыта вкладка удалённой извне заметки: {}", removedPath.getFileName());
             }
+        }
+
+        // 5.3. Изменённые файлы — реагируем только если заметка открыта в вкладке
+        for (Path modifiedPath : changeSet.modified) {
+            Tab tab = openTabs.get(modifiedPath);
+            if (tab == null) {
+                // Заметка не открыта — индексы будут актуализированы при
+                // следующем её открытии/сохранении, дополнительных действий не требуется
+                continue;
+            }
+
+            reloadOpenNoteFromDisk(modifiedPath, tab);
         }
     }
 
-    private void setupTheme() {
-        applyTheme(themeManager.getCurrentTheme());
+    /**
+     * Перечитывает содержимое заметки с диска и обновляет открытую вкладку.
+     * Если текст в редакторе отличается от того, что было загружено в него
+     * изначально (то есть пользователь редактировал заметку), спрашивает
+     * подтверждение, чтобы не потерять несохранённые правки.
+     */
+    private void reloadOpenNoteFromDisk(Path notePath, Tab tab) {
+        if (!(tab.getUserData() instanceof NoteTabContent content)) {
+            return;
+        }
 
-        themeManager.themeProperty().addListener((obs, oldTheme, newTheme) -> {
-            applyTheme(newTheme);
-        });
+        String diskContent;
+        try {
+            diskContent = Files.readString(notePath);
+        } catch (IOException e) {
+            logger.error("Не удалось прочитать изменённый файл: {}", notePath, e);
+            return;
+        }
+
+        String currentEditorText = content.contentTextArea.getText();
+
+        // Если содержимое на диске совпадает с тем, что уже в редакторе —
+        // вероятно, это собственное сохранение приложения, ничего не делаем
+        if (diskContent.equals(currentEditorText)) {
+            return;
+        }
+
+        // Сравниваем с тем, что было загружено в заметку при последнем чтении/сохранении.
+        // note.getBodyContent() хранит последнее известное приложению содержимое.
+        boolean hasUnsavedChanges = !currentEditorText.equals(content.note.getBodyContent());
+
+        if (hasUnsavedChanges) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle(LanguageManager.getInstance().get("dialog.externalChange.title"));
+            alert.setHeaderText(content.note.getTitle());
+            alert.setContentText(LanguageManager.getInstance().get("dialog.externalChange.message"));
+
+            ButtonType reloadButton = new ButtonType(LanguageManager.getInstance().get("button.reload"));
+            ButtonType keepButton = new ButtonType(LanguageManager.getInstance().get("button.keepMine"));
+            alert.getButtonTypes().setAll(reloadButton, keepButton);
+
+            var result = alert.showAndWait();
+            if (result.isEmpty() || result.get() == keepButton) {
+                return; // пользователь решил сохранить свою версию
+            }
+        }
+
+        try {
+            Note reloaded = noteService.getNoteByPath(notePath);
+
+            if (reloaded == null) {
+                return;
+            }
+
+            content.note = reloaded;
+            content.contentTextArea.setText(reloaded.getBodyContent());
+
+            if (content.previewScrollPane != null && content.previewScrollPane.isVisible()) {
+                updatePreview(content);
+            }
+
+            logger.info("Заметка перезагружена с диска после внешнего изменения: {}", reloaded.getTitle());
+
+        } catch (Exception e) {
+            logger.error("Ошибка перезагрузки заметки после внешнего изменения: {}", notePath, e);
+        }
     }
 
     private void applyTheme(Theme theme) {
@@ -357,14 +431,6 @@ public class MainController {
         content.previewModeButton.getStyleClass().removeAll("btn-active", "btn-inactive");
 
         updateToggleButtonsStyle(content);
-    }
-
-    private String toHex(javafx.scene.paint.Color color) {
-        return String.format("#%02X%02X%02X",
-                (int) (color.getRed() * 255),
-                (int) (color.getGreen() * 255),
-                (int) (color.getBlue() * 255)
-        );
     }
 
     @FXML
@@ -810,13 +876,11 @@ public class MainController {
         boolean isPlusTab = currentTab != null
                 && "PLUS_TAB".equals(currentTab.getUserData());
 
-        // ❗ если нельзя использовать текущую вкладку — создаём новую
         if (currentTab == null || isPlusTab || !isNoteTab) {
             openNoteInTab(note);
             return;
         }
 
-        // ❗ если уже открыта — просто переключаемся
         if (openTabs.containsKey(note.getPath())) {
             Tab existingTab = openTabs.get(note.getPath());
 
@@ -830,7 +894,6 @@ public class MainController {
             }
         }
 
-        // 🔥 СОХРАНЯЕМ СТАРУЮ ЗАМЕТКУ
         if (currentTab.getUserData() instanceof NoteTabContent oldContent) {
             try {
                 if (oldContent.note != null && oldContent.contentTextArea != null) {
@@ -845,32 +908,23 @@ public class MainController {
             openTabs.remove(oldContent.note.getPath());
         }
 
-        // 🔥 СОЗДАЁМ НОВЫЙ КОНТЕНТ
         NoteTabContent newContent = createTabContent(note);
 
-        // 🔥 ВАЖНО: привязываем Tab
         newContent.tab = currentTab;
 
-        // 🔥 ОБНОВЛЯЕМ UI (в JavaFX потоке)
         Platform.runLater(() -> {
 
-            // 1. Заголовок вкладки
             currentTab.setText(note.getTitle());
 
-            // 2. Контент
             currentTab.setContent(newContent.container);
 
-            // 3. UserData
             currentTab.setUserData(newContent);
 
-            // 4. Выбор вкладки
             notesTabPane.getSelectionModel().select(currentTab);
         });
 
-        // 🔥 ОБНОВЛЯЕМ openTabs
         openTabs.put(note.getPath(), currentTab);
 
-        // 🔥 RECENT NOTES
         try {
             String relativePath = fsManager.getVaultPath()
                     .relativize(note.getPath())
@@ -1032,18 +1086,20 @@ public class MainController {
         setupBracketAutoComplete(content);
         setupAutoComplete(content);
 
-        // 🔥 АВТОСОХРАНЕНИЕ ПРИ ИЗМЕНЕНИИ ТЕКСТА
+        VBox.setVgrow(content.editArea, Priority.ALWAYS);
+
+        content.editArea.setPrefWidth(Double.MAX_VALUE);
+        content.editArea.setMaxWidth(Double.MAX_VALUE);
+
         final long[] lastSaveTime = {System.currentTimeMillis()};
 
         content.contentTextArea.textProperty().addListener((obs, oldVal, newVal) -> {
             lastSaveTime[0] = System.currentTimeMillis();
 
-            // Обновляем превью если нужно
             if (content.previewScrollPane.isVisible()) {
                 updatePreview(content);
             }
 
-            // Отложенное сохранение через 1 секунду после последнего изменения
             Platform.runLater(() -> {
                 if (System.currentTimeMillis() - lastSaveTime[0] >= 1000) {
                     saveNoteContent(content);
@@ -1055,12 +1111,10 @@ public class MainController {
         content.titleField.textProperty().addListener((obs, oldVal, newVal) -> {
             lastSaveTime[0] = System.currentTimeMillis();
 
-            // Обновляем превью если нужно
             if (content.previewScrollPane.isVisible()) {
                 updatePreview(content);
             }
 
-            // Отложенное сохранение через 1 секунду после последнего изменения
             Platform.runLater(() -> {
                 if (System.currentTimeMillis() - lastSaveTime[0] >= 1000) {
                     saveNoteContent(content);
@@ -1126,7 +1180,6 @@ public class MainController {
                 }
 
                 try {
-                    // Сохраняем содержимое перед переименованием
                     saveNoteContent(content);
 
                     Path oldPath = content.note.getPath();
@@ -1171,7 +1224,6 @@ public class MainController {
                 }
                 autoSaveLabel.setVisible(true);
 
-                // Скрываем через 2 секунды
                 PauseTransition delay = new PauseTransition(Duration.seconds(2));
                 delay.setOnFinished(e -> autoSaveLabel.setVisible(false));
                 delay.play();
@@ -1179,7 +1231,6 @@ public class MainController {
         });
     }
 
-    // Метод для автозамены [[ на [[]] с правильной позицией курсора
     private void setupBracketAutoComplete(NoteTabContent content) {
         TextArea textArea = content.contentTextArea;
 
@@ -1188,9 +1239,8 @@ public class MainController {
                 int caretPos = textArea.getCaretPosition();
                 String text = textArea.getText();
 
-                // Проверяем, что вводится вторая скобка
                 if (caretPos > 0 && caretPos <= text.length() && text.charAt(caretPos - 1) == '[') {
-                    event.consume(); // Отменяем ввод второй скобки
+                    event.consume();
 
                     Platform.runLater(() -> {
                         try {
@@ -1200,11 +1250,8 @@ public class MainController {
                             if (currentPos > 0 && currentPos <= currentText.length() &&
                                     currentText.charAt(currentPos - 1) == '[') {
 
-                                // Удаляем первую скобку
                                 textArea.deleteText(currentPos - 1, currentPos);
-                                // Вставляем полную конструкцию
                                 textArea.insertText(currentPos - 1, "[[]]");
-                                // Устанавливаем курсор между скобками (позиция currentPos + 1)
                                 textArea.positionCaret(currentPos + 1);
                             }
                         } catch (Exception e) {
@@ -1221,7 +1268,6 @@ public class MainController {
         ContextMenu suggestionsMenu = new ContextMenu();
 
         textArea.textProperty().addListener((obs, oldText, newText) -> {
-            // Безопасная проверка
             if (newText == null || newText.isEmpty()) {
                 suggestionsMenu.hide();
                 return;
@@ -1229,7 +1275,6 @@ public class MainController {
 
             int caretPos = textArea.getCaretPosition();
 
-            // Защита от выхода за границы
             if (caretPos < 0 || caretPos > newText.length()) {
                 suggestionsMenu.hide();
                 return;
@@ -1241,7 +1286,6 @@ public class MainController {
             }
 
             try {
-                // Ищем [[ перед курсором
                 int openPos = -1;
                 for (int i = Math.min(caretPos - 1, newText.length() - 1); i >= 0; i--) {
                     if (i > 0 && i - 1 < newText.length() && i < newText.length()) {
@@ -1252,13 +1296,11 @@ public class MainController {
                     }
                 }
 
-                // Если нет [[ перед курсором - скрываем
                 if (openPos == -1) {
                     suggestionsMenu.hide();
                     return;
                 }
 
-                // Ищем ]] после [[
                 int closePos = -1;
                 for (int i = openPos + 2; i < newText.length() - 1; i++) {
                     if (i + 1 < newText.length()) {
@@ -1269,17 +1311,14 @@ public class MainController {
                     }
                 }
 
-                // Если есть ]] и курсор после них - скрываем подсказки
                 if (closePos != -1 && caretPos > closePos + 1) {
                     suggestionsMenu.hide();
                     return;
                 }
 
-                // Показываем подсказки
                 if (caretPos > openPos + 1) {
                     int inputStart = openPos + 2;
 
-                    // Защита от выхода за границы
                     if (inputStart >= newText.length()) {
                         suggestionsMenu.hide();
                         return;
@@ -1333,7 +1372,6 @@ public class MainController {
                                         int insertPos = startPos + 2;
 
                                         if (insertPos >= 0 && insertPos <= currentText.length()) {
-                                            // Проверяем, есть ли уже ]] после курсора
                                             boolean hasClosingAfter = false;
                                             for (int i = currentPos; i < currentText.length() - 1; i++) {
                                                 if (i + 1 < currentText.length() &&
@@ -1375,7 +1413,6 @@ public class MainController {
                             try {
                                 suggestionsMenu.show(textArea, Side.BOTTOM, 0, 0);
                             } catch (Exception e) {
-                                // Игнорируем ошибки показа меню
                             }
                         }
                     } else {
@@ -1444,7 +1481,6 @@ public class MainController {
                 }
             }
         } catch (Exception e) {
-            // Игнорируем ошибки
         }
     }
 
@@ -1517,30 +1553,26 @@ public class MainController {
     }
 
     private void updatePreview(NoteTabContent content) {
-        if (content == null || content.note == null) return;
+
+        if (content == null || content.note == null) {
+            return;
+        }
 
         String title = content.titleField.getText();
-        String bodyHtml = markdownRenderer.renderToHtml(
-                content.contentTextArea.getText()
+
+        String markdown = content.contentTextArea.getText();
+
+        content.note.setBodyContent(markdown);
+        content.note.extractTags();
+
+        String markdownWithoutTags = markdown.replaceAll(
+                "(?m)^\\s*#([\\p{L}\\p{N}_-]+)\\s*$",
+                ""
         );
 
-        String html = """
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {
-                }
-                h1 {
-                }
-            </style>
-        </head>
-        <body>
-            <h1>%s</h1>
-            %s
-        </body>
-        </html>
-        """.formatted(title, bodyHtml);
+        String html = markdownRenderer.renderToHtml(
+                "# " + title + "\n\n" + markdownWithoutTags
+        );
 
         content.webView.getEngine().loadContent(html);
     }
@@ -1824,6 +1856,8 @@ public class MainController {
         TreeItem<Path> root = notesTreeView.getRoot();
         root.getChildren().clear();
         buildFileTree(fsManager.getVaultPath(), root);
+
+        fileWatcher.refreshSnapshotSilently();
     }
 
     private void updateNotesCount() {
@@ -2037,46 +2071,88 @@ public class MainController {
     @FXML
     private void handleDeleteFolder() {
         TreeItem<Path> sel = notesTreeView.getSelectionModel().getSelectedItem();
-        if (sel == null || sel.getValue() == null || !Files.isDirectory(sel.getValue())) return;
-
+        if (sel == null
+                || sel.getValue() == null
+                || !Files.isDirectory(sel.getValue())) {
+            return;
+        }
         Path p = sel.getValue();
-        if (p.equals(fsManager.getVaultPath())) return;
-
+        if (p.equals(fsManager.getVaultPath())) {
+            return;
+        }
         LanguageManager lm = LanguageManager.getInstance();
 
         try {
-            long cnt = Files.walk(p).filter(x -> !x.equals(p)).count();
+            long cnt = Files.walk(p)
+                    .filter(x -> !x.equals(p))
+                    .count();
 
             String message = cnt > 0
                     ? lm.format("folder.delete.notEmpty", cnt)
                     : lm.get("folder.delete.confirm");
 
-            Alert a = new Alert(Alert.AlertType.CONFIRMATION, message);
+            Alert a = new Alert(
+                    Alert.AlertType.CONFIRMATION,
+                    message
+            );
+
             a.setTitle(message);
             a.setHeaderText(null);
 
             a.showAndWait().ifPresent(r -> {
                 if (r == ButtonType.OK) {
                     try {
-                        openTabs.keySet().stream()
-                                .filter(n -> n.startsWith(p))
-                                .forEach(n -> {
-                                    notesTabPane.getTabs().remove(openTabs.get(n));
-                                    openTabs.remove(n);
+
+                        new ArrayList<>(openTabs.keySet())
+                                .stream()
+                                .filter(path -> path.startsWith(p))
+                                .forEach(path -> {
+                                    Tab tab = openTabs.get(path);
+                                    if (tab != null) {
+                                        notesTabPane.getTabs().remove(tab);
+                                    }
+                                    openTabs.remove(path);
+                                });
+                        Files.walk(p)
+                                .filter(Files::isRegularFile)
+                                .filter(fsManager::isNote)
+                                .forEach(notePath -> {
+                                    try {
+                                        Note note =
+                                                noteService.getNoteByPath(notePath);
+
+                                        if (note != null) {
+                                            noteService.deleteNote(note);
+                                        }
+                                    } catch (Exception ex) {
+                                        logger.error(
+                                                "Ошибка удаления заметки из индекса: {}",
+                                                notePath,
+                                                ex
+                                        );
+                                    }
                                 });
 
                         fsManager.delete(p);
+
                         refreshTree();
                         updateNotesCount();
 
                     } catch (Exception e) {
-                        showError("Error", e.getMessage());
+                        showError(
+                                "Error",
+                                e.getMessage()
+                        );
                     }
                 }
             });
 
         } catch (Exception e) {
-            showError("Error", e.getMessage());
+
+            showError(
+                    "Error",
+                    e.getMessage()
+            );
         }
     }
 
@@ -2308,6 +2384,8 @@ public class MainController {
     public void shutdown() {
         logger.info("Завершение работы контроллера");
 
+        fileWatcher.stop();
+
         for (Tab tab : notesTabPane.getTabs()) {
             if (tab.getUserData() instanceof NoteTabContent) {
                 NoteTabContent content = (NoteTabContent) tab.getUserData();
@@ -2365,5 +2443,52 @@ public class MainController {
                 }
             });
         }
+
+        public void openTag(String tag) {
+            logger.info("JavaBridge.openTag вызван: '{}'", tag);
+
+            if (tag == null || tag.trim().isEmpty()) {
+                return;
+            }
+
+            final String cleanTag = tag.trim();
+
+            Platform.runLater(() -> {
+                try {
+                    searchByTag(cleanTag);
+                } catch (Exception e) {
+                    logger.error("Ошибка поиска по тегу '{}': {}", cleanTag, e.getMessage(), e);
+                    showError("Ошибка", e.getMessage());
+                }
+            });
+        }
+    }
+
+    private void searchByTag(String tag) {
+        Set<String> noteTitles = TagIndexManager.getInstance().getNotesByTag(tag);
+
+        logger.info("Найдено {} заметок для тега #{}", noteTitles.size(), tag);
+
+        List<SearchResult> results = new ArrayList<>();
+
+        for (String title : noteTitles) {
+            Optional<Note> note = noteService.getNoteByTitle(title);
+            if (note.isPresent()) {
+                results.add(new SearchResult(
+                        note.get().getPath(),
+                        title,
+                        "Содержит тег #" + tag,
+                        0
+                ));
+            } else {
+                logger.warn("Заметка '{}' из индекса тегов не найдена в репозитории", title);
+            }
+        }
+
+        results.sort((a, b) -> a.noteTitle.compareToIgnoreCase(b.noteTitle));
+
+        searchResultsList.getItems().clear();
+        searchResultsList.getItems().addAll(results);
+        showSearch();
     }
 }

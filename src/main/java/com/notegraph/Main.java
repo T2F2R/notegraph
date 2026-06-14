@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 
 /**
- * Главный класс приложения NoteGraph (файловая система).
+ * Главный класс приложения NoteGraph.
  */
 public class Main extends Application {
 

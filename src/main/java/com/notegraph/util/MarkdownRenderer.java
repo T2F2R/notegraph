@@ -38,8 +38,22 @@ public class MarkdownRenderer {
         String html = renderer.render(document);
 
         html = processTaskLists(html);
+        html = processTags(html);
 
         return wrapInHtmlTemplate(html);
+    }
+
+    /**
+     * Преобразует #тег в кликабельную ссылку.
+     * Срабатывает только если # стоит в начале строки/после пробела
+     * и не внутри HTML-тега или атрибута (после рендера commonmark текст внутри тегов остаётся как есть,
+     * поэтому достаточно требовать "не цифра перед #" и "слово после #").
+     */
+    private String processTags(String html) {
+        return html.replaceAll(
+                "(?<![\\w&])#([A-Za-zА-Яа-яЁё0-9_-]+)",
+                "<a href='#' onclick=\"window.javaApp.openTag('$1'); return false;\" class=\"tag\">#$1</a>"
+        );
     }
 
     private String processWikiLinks(String text) {
@@ -193,6 +207,28 @@ th {
 .wiki-link:hover {
     background-color: ${LINK_HOVER};
     text-decoration: underline;
+}
+
+.tag {
+    display: inline-block;
+    margin: 3px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background-color: ${LINK};
+    color: white;
+    font-size: 0.85em;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.tag:hover {
+    opacity: 0.85;
+}
+
+.tags-container {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid ${BORDER};
 }
 </style>
 </head>

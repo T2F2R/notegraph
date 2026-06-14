@@ -1,7 +1,6 @@
 package com.notegraph.model;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -19,7 +18,7 @@ public class Note {
     private Map<String, Object> frontmatter;
     private LocalDateTime created;
     private LocalDateTime modified;
-    private List<String> tags;
+    private Set<String> tags;
     private boolean bookmarked;
     private List<String> outgoingLinks;
     private List<String> incomingLinks;
@@ -32,7 +31,7 @@ public class Note {
     public Note(Path path) {
         this.path = path;
         this.frontmatter = new HashMap<>();
-        this.tags = new ArrayList<>();
+        this.tags = new HashSet<>();
         this.outgoingLinks = new ArrayList<>();
         this.incomingLinks = new ArrayList<>();
         this.bookmarked = false;
@@ -50,7 +49,7 @@ public class Note {
         this.bodyContent = content;
         this.content = content;
         this.frontmatter = new HashMap<>();
-        this.tags = new ArrayList<>();
+        this.tags = new HashSet<>();
         this.outgoingLinks = new ArrayList<>();
         this.incomingLinks = new ArrayList<>();
         this.bookmarked = false;
@@ -67,7 +66,7 @@ public class Note {
     @Deprecated
     public Note() {
         this.frontmatter = new HashMap<>();
-        this.tags = new ArrayList<>();
+        this.tags = new HashSet<>();
         this.outgoingLinks = new ArrayList<>();
         this.incomingLinks = new ArrayList<>();
         this.bookmarked = false;
@@ -145,15 +144,6 @@ public class Note {
     
     public void setModified(LocalDateTime modified) {
         this.modified = modified;
-    }
-
-    
-    public List<String> getTags() {
-        return tags;
-    }
-    
-    public void setTags(List<String> tags) {
-        this.tags = tags;
     }
     
     public void setBookmarked(boolean bookmarked) {
@@ -256,5 +246,29 @@ public class Note {
                 ", title='" + title + '\'' +
                 ", modified=" + modified +
                 '}';
+    }
+
+    public Set<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(Set<String> tags) {
+        this.tags = tags;
+    }
+
+    /**
+     * Извлечь теги из содержимого заметки.
+     * Тег начинается с символа #.
+     */
+    public void extractTags() {
+
+        tags.clear();
+
+        Pattern pattern = Pattern.compile("#([\\p{L}\\p{N}_-]+)");
+        Matcher matcher = pattern.matcher(bodyContent);
+
+        while (matcher.find()) {
+            tags.add(matcher.group(1));
+        }
     }
 }
